@@ -6,9 +6,9 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .ui-button { text-decoration: none; font-family: inherit; }
 .ui-page { width: 100%; max-width: var(--form-max-width); margin: 0 auto; padding: var(--page-gutter); }
 .ui-stack { display: grid; gap: var(--group-gap); }
-.ui-heading { margin: 0; font-size: var(--text-title); line-height: var(--line-title); font-weight: var(--weight-bold); }
+.ui-heading { margin: 0; font-size: var(--text-title); line-height: var(--line-title); font-weight: var(--weight-semibold); }
 .ui-description { margin: var(--label-gap) 0 0; color: var(--muted-ink); }
-.ui-group { padding: var(--group-gap); border: var(--border-width) solid var(--separator); border-radius: var(--radius-xl); background: var(--card); }
+.ui-group { padding: var(--group-gap); border: var(--border-width) solid var(--hairline); border-radius: var(--radius-xl); background: var(--card); }
 .ui-section-heading { margin: 0 0 var(--field-gap); font-size: var(--text-heading); font-weight: var(--weight-semibold); }
 .ui-fields { display: grid; gap: var(--field-gap); }
 .ui-field { display: grid; gap: var(--label-gap); }
