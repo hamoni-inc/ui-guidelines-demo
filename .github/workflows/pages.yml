@@ -14,7 +14,22 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_name: ${{ steps.artifact-name.outputs.name }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
+      - name: Name this upload
+        id: artifact-name
+        run: echo "name=github-pages-${{ github.run_id }}-${{ github.run_attempt }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          name: ${{ steps.artifact-name.outputs.name }}
+          path: site
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,11 +39,8 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v4
-        with:
-          path: site
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
