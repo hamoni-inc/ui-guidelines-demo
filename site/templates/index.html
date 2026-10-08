@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ダッシュボード — Studio</title>
+  <link rel="stylesheet" href="../styles/tokens.css"><link rel="stylesheet" href="../styles/primitives.css"><link rel="stylesheet" href="../styles/samples.css">
+</head>
+<body data-page="dashboard">
+  <main class="app-page">
+    <header class="app-header"><div><h1 class="ui-heading">ダッシュボード</h1><p class="ui-description">2026年10月 · 事業と制作の状況</p></div><span class="app-caption">サンプルデータ</span></header>
+    <div class="app-dash-grid" id="dashboard-content">
+      <section class="app-panel" aria-labelledby="chart-title">
+        <header class="app-panel-heading"><h2 id="chart-title">売上と営業利益</h2><div class="app-segments" id="chart-range" role="radiogroup" aria-label="表示期間"><button type="button" role="radio" data-value="6" aria-checked="true">6か月</button><button type="button" role="radio" data-value="12" aria-checked="false">12か月</button></div></header>
+        <div class="app-panel-body"><div class="app-metrics" id="metrics"></div><svg class="app-chart" id="revenue-chart" viewBox="0 0 900 280" role="group" aria-labelledby="chart-title chart-description"></svg><p class="app-sr-only" id="chart-description">最新月の売上842万円、営業利益312万円。各月を選択するとその月の数値を確認できます。</p><button class="ui-button" id="chart-reset" type="button" data-variant="tertiary" data-density="compact" hidden>最新月に戻す</button><details class="app-state-controls"><summary>正確な数値を見る</summary><div class="app-table-scroll" id="exact-values"></div></details></div>
+      </section>
+      <section class="app-panel" aria-labelledby="tasks-title"><header class="app-panel-heading"><h2 id="tasks-title">今週の制作</h2><a class="ui-button" data-variant="tertiary" data-density="compact" href="timeline.html">すべて見る</a></header><div class="app-panel-body"><ul class="app-list" id="project-list"></ul></div></section>
+      <section class="app-panel app-dash-wide" aria-labelledby="channels-title"><header class="app-panel-heading"><h2 id="channels-title">チャネル別の実績</h2><span class="app-caption">2026年10月</span></header><div class="app-table-scroll"><table class="app-data-grid"><thead><tr><th scope="col">チャネル</th><th scope="col" class="is-number">運用数</th><th scope="col" class="is-number">売上</th><th scope="col" class="is-number">前月比</th></tr></thead><tbody><tr><td>Instagram</td><td class="is-number">18</td><td class="is-number">¥4,320,000</td><td class="is-number">+¥180,000</td></tr><tr><td>YouTube</td><td class="is-number">8</td><td class="is-number">¥2,800,000</td><td class="is-number">+¥100,000</td></tr><tr><td>TikTok</td><td class="is-number">4</td><td class="is-number">¥1,300,000</td><td class="is-number">+¥40,000</td></tr></tbody></table></div></section>
+    </div>
+    <section id="dashboard-state" class="app-panel" hidden aria-live="polite"></section>
+    <details class="app-state-controls"><summary>表示状態のサンプル</summary><div class="app-toolbar"><label for="dashboard-demo">ダッシュボード</label><select id="dashboard-demo" class="ui-input"><option value="ready">通常</option><option value="loading">読み込み中</option><option value="empty">データなし</option><option value="error">取得エラー</option></select></div></details>
+  </main>
+  <script type="module" src="../samples/dashboard.mjs"></script>
+</body>
+</html>

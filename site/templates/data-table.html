@@ -1,0 +1,2080 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>テーブルビュー — UIサンプル</title>
+<!--
+  一覧ページ共通テーブルレイアウトの見本
+  ルールの詳細は ../DESIGN.md（索引）から各ドキュメントを参照
+
+  ■ ページ構成
+    見出し行（タイトル＋説明文＋右端に追加と補助操作） → テーブル（独立した検索・操作バーは置かない）
+    - 見出しは1行・高さ32pxに収め、縦の場所を取らない
+    - タイトルは名詞だけ（「〜一覧」「〜管理」は付けない）
+    - 説明文は「何のページか」を20字前後で1行だけ。操作方法は書かない（UI側のホバー表示やフッターのキー案内で伝える）
+
+  ■ テーブルヘッダー
+    - スクロールしても上部に固定（sticky）
+    - 列の境目をドラッグで列幅変更、ダブルクリックで初期幅に戻す
+    - 列名クリックで「並び替え＋絞り込み」メニュー。型ごとにUIを切り替え
+        text   : 部分一致
+        number : 以上 / 未満 / 範囲
+        date   : 期間（開始日〜終了日）＋ プリセット
+        tag    : 複数選択
+
+  ■ 行・セル
+    - 主キー列（アカウント名）は左端に固定。クリックで右から詳細シート（オーバーレイ）
+    - 手動入力の列（editor 指定あり）はセルをクリックしてその場で編集
+        text / number / date : セル上に入力欄 → Enter で確定 / Esc で取消 / Tab で次のセル
+        select / multiselect  : セル下にメニュー
+        person                : 名前・メールで検索できる候補リスト（テーブル・詳細シート共通）
+    - 金額などの数値入力は入力中もカンマ区切りで表示する
+    - 自動取得の列（editor 指定なし）は表示のみ。詳細シートでは「自動取得」グループに分けて表示
+    - 変更は即時保存し、トーストから取り消し可能
+
+  ■ 高さ（データが少ない時の余白対策）
+    - カードは中身の高さに合わせ、画面に収まらない時だけ内部スクロールにする
+    - カードを flex: 1 や固定 height で引き伸ばさない（数件しかない時に下部が空白になる）
+    - 件数フッターは常に最終行の直下に付く
+
+  ■ アクション（ボタン）の置き場所
+    - 主要操作の新規追加は見出し右側の「＋ 追加」に出す
+        ページ全体の補助操作（書き出し・表示リセット等）       : タイトル右の「…」
+        1行に対する操作（複製・削除等）                         : 詳細シート右上の「…」
+    - メニュー内の並び順: よく使う操作 → 区切り線 → 破壊的な操作（赤字）を最後
+    - 項目は PAGE_ACTIONS / ROW_ACTIONS に定義を足すだけで増やせる
+    - 削除などの破壊的操作は確認ダイアログを出さず、即実行＋トーストで取り消し可能にする
+
+  ■ 集計行
+    - 数値列は列定義の aggregate（sum / avg / max / min）でテーブル最下部に集計を表示
+    - 集計行は下端に固定し、セルをクリックすると集計方法を切り替えられる（なし も可）
+    - 集計対象は「絞り込み後に表示されている行」。絞り込み・編集・追加・削除に即追従する
+
+  ■ 余白
+    - ページ外周は上下左右すべて --page-gutter（24px / スマホ16px）。辺ごとに値を変えない
+    - 見出し行 → テーブルの間は --page-gap（16px）
+    - データが少なくカードが縮んだ時に下が空くのは正常（余白を詰めるためにカードを引き伸ばさない）
+
+  ■ 角丸・サイズ
+    - 角丸は --radius-sm(6) / md(8) / lg(12) / xl(16) / full の5段階のみ。入れ子は「内側 = 外側 − 余白」
+    - 並べるコントロールは高さをそろえる（ページ右上のスイッチャーと「…」はどちらも 28px・角丸8px）
+
+  ■ 共通コンポーネント
+    セグメンテッドコントロール（スイッチャー） .segmented
+      - 2〜4択の切り替えに使う（テーマ、並び替え、以上/未満/範囲、ステータス等）。5択以上はメニューにする
+      - 項目は等幅。選択中の白い面は1枚をスライドさせ、ボタン自体には背景を付けない
+      - 高さ28px・角丸9px。インライン幅が既定、メニュー内は .is-block で横幅いっぱい
+      - role="radiogroup" / role="radio" + aria-checked で状態を持つ
+
+  ■ キーボード
+    ↑ ↓（j / k） : 行の移動（詳細シートを開いている時は表示中のレコードも切り替わる）
+    Enter         : 選択中の行の詳細を開く
+    Esc           : メニュー / 詳細シートを閉じる
+-->
+<style>
+/* @generated tokens:start */
+/* 値の唯一の定義元。機能追加では変更せず、共通仕様の変更として扱う。 */
+:root {
+    color-scheme: light dark;
+    --canvas: light-dark(#f5f5f7, #000000);
+    --card: light-dark(#ffffff, #1c1c1e);
+    --grouped: light-dark(#f2f2f7, #1c1c1e);
+    --group: light-dark(#ffffff, #2c2c2e);
+    --elevated: light-dark(#ffffff, #3a3a3c);
+    --ink: light-dark(#1d1d1f, #f5f5f7);
+    --muted-ink: light-dark(#6e6e73, #a1a1a6);
+    --subtle-ink: light-dark(#8e8e93, #8e8e93);
+    --hairline: light-dark(rgba(0, 0, 0, 0.065), rgba(255, 255, 255, 0.08));
+    --separator: light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.15));
+    --fill: light-dark(rgba(118, 118, 128, 0.1), rgba(118, 118, 128, 0.24));
+    --fill-hover: light-dark(rgba(0, 0, 0, 0.028), rgba(255, 255, 255, 0.045));
+    --header-bg: light-dark(rgba(251, 251, 253, 0.84), rgba(28, 28, 30, 0.84));
+    --material: light-dark(rgba(255, 255, 255, 0.88), rgba(44, 44, 46, 0.9));
+    --accent: light-dark(oklch(0.55 0.22 255), oklch(0.7 0.17 255));
+    --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+    --accent-tint: color-mix(in oklch, var(--accent) 8%, transparent);
+    --green: light-dark(#248a3d, #30d158);
+    --blue: light-dark(#0071e3, #0a84ff);
+    --orange: light-dark(#c93400, #ff9f0a);
+  --red: light-dark(#d70015, #ff453a);
+    --pin-shadow: light-dark(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.55));
+    --backdrop: light-dark(rgba(0, 0, 0, 0.16), rgba(0, 0, 0, 0.5));
+    --shadow-card: 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1)), 0 1px 3px light-dark(rgba(0, 0, 0, 0.04), transparent);
+    --shadow-pop: 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.12)), 0 10px 32px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.5)), 0 2px 6px light-dark(rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0.3));
+    --shadow-sheet: 0 0 0 0.5px light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.1)), 0 24px 64px light-dark(rgba(0, 0, 0, 0.18), rgba(0, 0, 0, 0.6));
+    --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --page-gutter: 24px;
+  --page-gap: 16px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Hiragino Sans", "Noto Sans JP", Inter, sans-serif;
+  /* 新規共通部品の固定スケールと役割 */
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 12px;
+  --space-6: 16px;
+  --space-7: 20px;
+  --space-8: 24px;
+  --space-9: 32px;
+  --space-10: 48px;
+  --page-gutter-small: var(--space-6);
+  --group-gap: var(--space-8);
+  --field-gap: var(--space-6);
+  --label-gap: var(--space-3);
+  --control-compact: 28px;
+  --control-regular: 44px;
+  --input-compact: 32px;
+  --input-regular: 44px;
+  --table-header-height: 38px;
+  --table-row-height: 46px;
+  --text-title: 1.375rem;
+  --text-heading: 1.0625rem;
+  --text-body: .9375rem;
+  --text-compact: .8125rem;
+  --text-caption: .75rem;
+  --line-title: 1.75rem;
+  --line-body: 1.5rem;
+  --line-caption: 1.125rem;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --on-accent: #ffffff;
+  --action-accent: light-dark(#005ac1, #005ac1);
+  --danger-soft: color-mix(in srgb, var(--red) 8%, var(--card));
+  --border-width: 1px;
+  --focus-width: 2px;
+  --focus-offset: 2px;
+  --form-max-width: 640px;
+  --action-min-width: 11rem;
+  --motion-fast: 150ms;
+  --motion-menu: 180ms;
+  --motion-control: 280ms;
+  --motion-sheet: 450ms;
+  --motion-reduced: 0.01ms;
+  --ease-standard: cubic-bezier(.2, 0, 0, 1);
+  /* サンプル全体で共有するアプリ骨格と表示 */
+  --sidebar-width: 244px;
+  --sidebar-bg: light-dark(#eeeef0, #161618);
+  --nav-selected: light-dark(#dddde1, #303034);
+  --nav-row-height: 40px;
+  --mobile-bar-height: 56px;
+  --content-max-width: 1280px;
+  --icon-size: 18px;
+  --avatar-size: 36px;
+  --avatar-large: 72px;
+  --metric-size: 2rem;
+  --metric-line: 2.5rem;
+  --timeline-label-width: 168px;
+  --timeline-min-width: 840px;
+  --timeline-row-height: 72px;
+  --timeline-bar-height: 32px;
+  --chart-height: 240px;
+  --stroke-chart: 2.5px;
+  --toast-max-width: 480px;
+  --toast-timeout: 4000ms;
+  --layer-sidebar: 40;
+  --layer-toast: 200;
+  --series-revenue: var(--blue);
+  --series-profit: var(--green);
+  --brand-instagram: #b5245b;
+  --brand-youtube: #cc001f;
+  --status-size: 6px;
+  --skeleton-fill: var(--fill);
+  --disabled-opacity: .55;
+  --segment-button-height: 24px;
+  --segment-text-size: .78125rem;
+  --line-segment: 1;
+  --material-blur: 24px;
+  --header-blur: 20px;
+  --success-soft: color-mix(in srgb, var(--green) 12%, var(--card));
+  --settings-max-width: 840px;
+  --layer-nav-backdrop: 39;
+}
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"] { color-scheme: dark; }
+/* @generated tokens:end */
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--canvas);
+    color: var(--ink);
+    font: 14px/1.5 var(--font);
+    -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ===== ページ骨格 ===== */
+  .page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: var(--page-gutter); /* 上下左右すべて同じ値。辺ごとに変えない */
+  }
+  /* ページ見出しは1行（高さ32px）に収める。主役はテーブルなので見出しで縦の場所を取らない
+     タイトルの右に説明文を同じ行で並べ、入りきらない分は省略（全文は title 属性で確認） */
+  .page-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    height: 32px;
+    margin-bottom: var(--page-gap);
+  }
+  .page-heading { display: flex; align-items: baseline; gap: 12px; flex: 1; min-width: 0; }
+  .page-title {
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 28px; /* 小数にすると右のコントロールが半端なピクセル位置になり、上下の余白がずれて見える */
+  }
+  .page-description {
+    margin: 0;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 20px;
+    color: var(--muted-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ===== テーブルカード ===== */
+  /* 高さは中身に合わせ、上限だけ画面に合わせる（flex: 0 1 auto）。
+     flex: 1 で引き伸ばすと、データが少ない時にカード下部へ大きな空白ができるため禁止 */
+  .table-card {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    border-radius: var(--radius-xl);
+    border: 1px solid var(--separator);
+    box-shadow: none;
+    overflow: hidden;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .table-card { box-shadow: var(--shadow-card); }
+  }
+  :root[data-theme="dark"] .table-card { box-shadow: var(--shadow-card); }
+  .table-scroll { flex: 0 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; }
+  table {
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    width: max-content;
+    min-width: 100%;
+  }
+
+  /* --- ヘッダー --- */
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 0;
+    background: var(--header-bg);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--hairline);
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted-ink);
+    white-space: nowrap;
+    user-select: none;
+  }
+  .th-inner {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    height: 38px;
+    padding: 0 14px;
+    cursor: pointer;
+    outline: none;
+    transition: color 0.15s;
+  }
+  th.align-right .th-inner { justify-content: flex-end; }
+  .th-inner:hover, .th-inner:focus-visible, th.is-open .th-inner { color: var(--ink); }
+  .th-label { overflow: hidden; text-overflow: ellipsis; }
+  .th-icon { flex-shrink: 0; width: 13px; height: 13px; opacity: 0; transition: opacity 0.15s; }
+  .th-inner:hover .th-icon, th.is-open .th-icon { opacity: 0.8; }
+  th.is-filtered .th-inner, th.is-sorted .th-inner { color: var(--accent); }
+  th.is-filtered .th-icon.filter, th.is-sorted .th-icon.sort { opacity: 1; }
+
+  /* --- 列幅変更ハンドル --- */
+  .resizer { position: absolute; top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; z-index: 1; }
+  .resizer::after {
+    content: "";
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    right: 0;
+    width: 1px;
+    background: var(--hairline);
+    transition: background-color 0.15s, top 0.15s, bottom 0.15s;
+  }
+  .resizer:hover::after, .resizer.is-active::after { top: 0; bottom: 0; width: 2px; background: var(--accent); }
+  th:last-child .resizer::after { display: none; }
+  body.is-resizing, body.is-resizing * { cursor: col-resize !important; user-select: none; }
+
+  /* --- ボディ --- */
+  tbody tr { --row-bg: transparent; }
+  tbody tr:hover { --row-bg: var(--fill-hover); }
+  tbody tr.is-active { --row-bg: var(--accent-tint); }
+  tbody td {
+    height: 46px;
+    padding: 0 14px;
+    background-image: linear-gradient(var(--row-bg), var(--row-bg));
+    border-bottom: 1px solid var(--hairline);
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    scroll-margin-top: 40px;
+    scroll-margin-bottom: 8px;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.align-right { text-align: right; }
+  .cell-muted { color: var(--muted-ink); }
+  .placeholder { color: var(--subtle-ink); }
+
+  /* --- 左端固定列 --- */
+  .pinned { position: sticky; left: 0; }
+  thead th.pinned { z-index: 4; background: linear-gradient(var(--header-bg), var(--header-bg)), var(--card); }
+  tbody td.pinned { z-index: 1; background-color: var(--card); }
+  tbody tr.is-active td.pinned { box-shadow: inset 2px 0 0 var(--accent); }
+  .is-scrolled-x .pinned { box-shadow: 1px 0 0 var(--hairline), 12px 0 16px -12px var(--pin-shadow); }
+  .is-scrolled-x tbody tr.is-active td.pinned { box-shadow: inset 2px 0 0 var(--accent), 1px 0 0 var(--hairline), 12px 0 16px -12px var(--pin-shadow); }
+
+  .cell-primary { cursor: pointer; }
+  .name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .name-text { font-weight: 500; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; transition: color 0.15s; }
+  .open-icon { flex-shrink: 0; width: 14px; height: 14px; margin-left: auto; color: var(--subtle-ink); opacity: 0; transition: opacity 0.15s, transform 0.2s; }
+  tr:hover .open-icon { opacity: 1; }
+  .cell-primary:hover .name-text { color: var(--accent); }
+  .cell-primary:hover .open-icon { color: var(--accent); transform: translateX(2px); }
+
+  /* --- 編集可能セル --- */
+  tbody td:not(.is-editable) { cursor: pointer; }
+  tbody td[tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  td.is-editable { position: relative; cursor: text; }
+  td.is-editable[data-editor="select"], td.is-editable[data-editor="multiselect"], td.is-editable[data-editor="person"] { cursor: pointer; }
+  td.is-editable::after {
+    content: "";
+    position: absolute;
+    inset: 6px 5px;
+    border-radius: var(--radius-md);
+    pointer-events: none;
+    transition: box-shadow 0.15s, background-color 0.15s;
+  }
+  td.is-editable:hover::after { box-shadow: inset 0 0 0 1px var(--separator); background: var(--fill-hover); }
+  .cell-flex { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .cell-caret { flex-shrink: 0; width: 12px; height: 12px; margin-left: auto; color: var(--subtle-ink); opacity: 0; }
+  td.is-editable:hover .cell-caret { opacity: 1; }
+  td.flash { animation: flash 1.4s ease-out; }
+  @keyframes flash { 0%, 25% { background-color: var(--accent-soft); } 100% { background-color: transparent; } }
+
+  /* --- アバター / タグ表現 --- */
+  .avatar {
+    --h: 250;
+    display: inline-grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    font-weight: 600;
+    background: light-dark(oklch(0.94 0.045 var(--h)), oklch(0.36 0.07 var(--h)));
+    color: light-dark(oklch(0.45 0.13 var(--h)), oklch(0.9 0.07 var(--h)));
+  }
+  .avatar.xs { width: 20px; height: 20px; border-radius: 50%; font-size: 10px; }
+  .avatar.lg { width: 56px; height: 56px; border-radius: var(--radius-xl); font-size: 24px; }
+
+  .dot { display: inline-block; flex-shrink: 0; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: var(--radius-sm);
+    background: var(--fill);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .pill .dot { width: 6px; height: 6px; }
+  .status { display: inline-flex; align-items: center; gap: 7px; }
+  .status .dot { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+  .person { display: inline-flex; align-items: center; gap: 7px; }
+
+  .empty { padding: 72px 16px; text-align: center; color: var(--muted-ink); white-space: normal; height: auto; }
+  .empty strong { display: block; color: var(--ink); font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+
+  /* --- フッター --- */
+  .table-footer {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-height: 42px;
+    padding: 7px 14px;
+    border-top: 1px solid var(--hairline);
+    font-size: 12px;
+    color: var(--muted-ink);
+  }
+  .table-footer .count { font-variant-numeric: tabular-nums; margin-right: 6px; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    height: 24px;
+    padding: 0 5px 0 10px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .chip svg { width: 14px; height: 14px; opacity: 0.6; }
+  .chip:hover svg { opacity: 1; }
+  .link { background: none; border: none; padding: 0; color: var(--muted-ink); cursor: pointer; font-size: 12px; }
+  .link:hover { color: var(--ink); }
+  .hints { display: flex; align-items: center; gap: 4px; margin-left: auto; color: var(--subtle-ink); }
+  .hints .gap { width: 10px; }
+  kbd {
+    display: inline-grid;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: var(--radius-sm);
+    background: var(--group);
+    box-shadow: 0 0 0 0.5px var(--separator), 0 1px 0 var(--separator);
+    color: var(--muted-ink);
+    font: 500 11px/1 var(--font);
+  }
+
+  /* ===== メニュー（ヘッダーの絞り込み / セルの選択編集） ===== */
+  .menu {
+    position: fixed;
+    z-index: 80; /* 詳細シート（71）より上 */
+    width: 272px;
+    padding: 6px;
+    border-radius: var(--radius-lg);
+    background: var(--material);
+    backdrop-filter: saturate(180%) blur(28px);
+    -webkit-backdrop-filter: saturate(180%) blur(28px);
+    box-shadow: var(--shadow-pop);
+    animation: menu-in 0.18s var(--ease-sheet);
+  }
+  .menu.is-compact { width: 208px; }
+  .menu.is-combo { width: 288px; padding: 0; }
+  .menu[hidden] { display: none; }
+  @keyframes menu-in { from { opacity: 0; transform: scale(0.97) translateY(-4px); } }
+  .menu-section { padding: 8px 8px 10px; }
+  .menu-section + .menu-section { border-top: 1px solid var(--hairline); }
+  .menu-label { margin-bottom: 8px; font-size: 11px; font-weight: 600; color: var(--subtle-ink); }
+  .menu-list { display: flex; flex-direction: column; max-height: 240px; overflow: auto; margin: 0 -4px; }
+  .menu.is-compact .menu-list { margin: 0; }
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 32px;
+    padding: 0 10px 0 6px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .menu-item:hover { background: var(--fill); }
+  .menu-item .check-icon { flex-shrink: 0; width: 14px; height: 14px; color: var(--accent); opacity: 0; }
+  .menu-item[aria-checked="true"] .check-icon { opacity: 1; }
+  .menu-item .count { margin-left: auto; color: var(--subtle-ink); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .menu-footer { display: flex; justify-content: flex-end; padding: 4px 8px 2px; border-top: 1px solid var(--hairline); }
+  .menu-footer button { padding: 4px 2px; border: none; background: none; color: var(--accent); font-size: 12.5px; cursor: pointer; }
+  .menu-footer button:disabled { color: var(--subtle-ink); cursor: default; }
+
+  /* --- 入力 --- */
+  .field {
+    width: 100%;
+    height: 32px;
+    padding: 0 10px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--fill);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: box-shadow 0.15s;
+  }
+  .field::placeholder { color: var(--subtle-ink); }
+  .field:focus { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent); }
+  .field-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .field-row .sep { flex-shrink: 0; color: var(--subtle-ink); font-size: 12px; }
+  .field-wrap { position: relative; flex: 1; }
+  .field-wrap .unit { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--subtle-ink); font-size: 12px; pointer-events: none; }
+  .field-wrap .field { padding-right: 28px; }
+  input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  .presets { display: flex; flex-wrap: wrap; gap: 4px; }
+  .preset {
+    height: 24px;
+    padding: 0 9px;
+    border: 1px solid var(--separator);
+    border-radius: var(--radius-full);
+    background: transparent;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .preset:hover { background: var(--fill-hover); }
+  .preset[aria-pressed="true"] { border-color: transparent; background: var(--accent-soft); color: var(--accent); }
+
+  /* --- セル上の入力欄 --- */
+  .cell-editor { position: fixed; z-index: 40; }
+  .cell-editor[hidden] { display: none; }
+  .cell-editor input {
+    width: 100%;
+    height: 100%;
+    padding: 0 9px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--elevated);
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent), 0 6px 20px light-dark(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.5));
+  }
+  .cell-editor input.is-number { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ===== 詳細シート（右からのオーバーレイ） ===== */
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    background: var(--backdrop);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s ease;
+  }
+  .backdrop.is-open { opacity: 1; pointer-events: auto; }
+  .sheet {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    z-index: 71;
+    display: flex;
+    flex-direction: column;
+    width: min(520px, calc(100vw - 16px));
+    border-radius: var(--radius-xl);
+    background: var(--grouped);
+    box-shadow: var(--shadow-sheet);
+    overflow: hidden;
+    outline: none;
+    transform: translateX(calc(100% + 24px));
+    transition: transform 0.45s var(--ease-sheet);
+  }
+  .sheet.is-open { transform: none; }
+  .sheet-header { display: flex; align-items: center; gap: 2px; height: 54px; padding: 0 12px; flex-shrink: 0; }
+  .sheet-pos { margin-left: 8px; font-size: 12px; color: var(--subtle-ink); font-variant-numeric: tabular-nums; }
+  .icon-btn {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--muted-ink);
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+  }
+  .icon-btn svg { width: 16px; height: 16px; }
+  .icon-btn:hover:not(:disabled) { background: var(--fill); color: var(--ink); }
+  .icon-btn:disabled { opacity: 0.3; cursor: default; }
+  .icon-btn.close { background: var(--fill); }
+  .sheet-header .more-btn { margin-left: auto; width: 28px; height: 28px; background: transparent; color: var(--muted-ink); }
+  .sheet-header .more-btn:hover { background: var(--fill); color: var(--ink); }
+  .icon-btn.close svg { width: 14px; height: 14px; }
+
+  .skeleton { background: var(--separator); border-radius: var(--radius-md); animation: skeleton-pulse 1.2s ease-in-out infinite; }
+  .skeleton-avatar { width: 56px; height: 56px; flex-shrink: 0; }
+  .skeleton-title { width: 160px; height: 24px; }
+  .skeleton-label { width: 80px; height: 12px; }
+  .skeleton-value { width: 144px; height: 16px; margin-left: auto; }
+  @keyframes skeleton-pulse { 50% { opacity: 0.45; } }
+  @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .sheet-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 20px 28px; }
+  .hero { display: flex; align-items: center; gap: 14px; padding: 4px 0 6px; }
+  .hero-text { flex: 1; min-width: 0; }
+  .hero-name {
+    width: 100%;
+    margin-left: -7px;
+    padding: 2px 7px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink);
+    font: 700 22px/1.3 var(--font);
+    letter-spacing: -0.02em;
+    outline: none;
+    transition: background-color 0.15s, box-shadow 0.15s;
+  }
+  .hero-name:hover { background: var(--fill-hover); }
+  .hero-name:focus { background: var(--group); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .hero-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 4px; font-size: 13px; }
+  .hero-meta .status { margin-right: 4px; }
+
+  .group { margin-top: 24px; }
+  .group-title { margin: 0; padding: 0 16px 7px; font-size: 12px; font-weight: 500; color: var(--muted-ink); }
+  .group-body { border-radius: var(--radius-lg); background: var(--group); overflow: hidden; }
+  .group-note { padding: 7px 16px 0; font-size: 12px; color: var(--subtle-ink); }
+  .g-row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 46px; padding: 7px 10px 7px 16px; }
+  .g-row + .g-row::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--hairline); }
+  .g-row.stack { flex-direction: column; align-items: stretch; gap: 4px; padding-top: 11px; }
+  .g-label { flex-shrink: 0; width: 112px; font-size: 14px; white-space: nowrap; }
+  .g-control { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
+  .g-value { padding-right: 8px; color: var(--muted-ink); font-size: 14px; font-variant-numeric: tabular-nums; }
+  .g-input, .g-select, .g-textarea {
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 14px;
+    outline: none;
+    transition: background-color 0.15s, box-shadow 0.15s;
+  }
+  .g-input { flex: 1; min-width: 0; height: 32px; padding: 0 8px; text-align: right; }
+  .g-input.g-date { flex: 0 0 auto; }
+  .g-input:hover, .g-select:hover, .person-field:hover { background: var(--fill-hover); }
+  .g-input:focus, .g-select:focus, .person-field:focus-visible { background: var(--fill); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .g-unit { color: var(--muted-ink); font-size: 14px; margin-right: 6px; }
+  .g-select-wrap { position: relative; display: inline-flex; align-items: center; }
+  .g-select { appearance: none; height: 32px; padding: 0 26px 0 10px; text-align: right; cursor: pointer; }
+  .g-select-wrap svg { position: absolute; right: 8px; width: 12px; height: 12px; color: var(--subtle-ink); pointer-events: none; }
+  /* メモ欄は枠・背景・リサイズハンドルを出さず、グループ自体を入力面として扱う。高さは内容に合わせて伸びる */
+  .g-textarea { width: 100%; min-height: 88px; padding: 0 0 10px; resize: none; field-sizing: content; line-height: 1.65; }
+  .person-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 32px;
+    padding: 0 8px 0 10px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    font-size: 14px;
+    cursor: pointer;
+    outline: none;
+    transition: background-color 0.15s, box-shadow 0.15s;
+  }
+  .person-field > svg { width: 12px; height: 12px; color: var(--subtle-ink); }
+
+  /* --- 担当者コンボボックス（名前・メールで検索） --- */
+  .combo-search { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 14px; border-bottom: 1px solid var(--hairline); }
+  .combo-search svg { flex-shrink: 0; width: 15px; height: 15px; color: var(--subtle-ink); }
+  .combo-input { flex: 1; min-width: 0; height: 100%; border: none; background: transparent; color: var(--ink); font: inherit; font-size: 13.5px; outline: none; }
+  .combo-input::placeholder { color: var(--subtle-ink); }
+  .combo-list { margin: 0; padding: 6px; max-height: 280px; }
+  .person-item { min-height: 44px; gap: 10px; }
+  .person-item.is-highlighted { background: var(--fill); }
+  .person-meta { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+  .person-name { font-size: 13px; font-weight: 500; }
+  .person-email { font-size: 11.5px; color: var(--muted-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person-item mark { background: none; color: var(--accent); font-weight: 600; }
+  .combo-empty { padding: 20px 12px; text-align: center; font-size: 12.5px; color: var(--muted-ink); }
+  .g-textarea::placeholder, .g-input::placeholder { color: var(--subtle-ink); }
+  .toggle-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 9px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--fill);
+    font-size: 13px;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s, box-shadow 0.15s;
+  }
+  .toggle-chip .dot { width: 6px; height: 6px; }
+  .toggle-chip[aria-pressed="false"] { color: var(--muted-ink); }
+  .toggle-chip[aria-pressed="false"] .dot { opacity: 0.4; }
+  .toggle-chip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--accent) 35%, transparent); }
+
+  .sheet-footer {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    height: 44px;
+    padding: 0 20px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--hairline);
+    font-size: 12px;
+    color: var(--subtle-ink);
+  }
+  .sheet-footer .gap { width: 12px; }
+  .sheet-footer .autosave { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+  .sheet-footer .autosave svg { width: 13px; height: 13px; color: var(--green); }
+
+  /* ===== ページ右上のアクション ===== */
+  /* タイトル1行目（34px）の高さで上下中央にそろえる */
+  .page-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; height: 32px; }
+  .more-btn { width: 28px; height: 28px; background: var(--fill); color: var(--ink); }
+  .more-btn svg { width: 18px; height: 18px; }
+  .more-btn[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent); }
+
+  /* --- 「…」メニューの項目 --- */
+  .menu.is-actions { width: 240px; }
+  .action-item { gap: 10px; padding: 0 10px; min-height: 34px; }
+  .action-item svg { flex-shrink: 0; width: 16px; height: 16px; color: var(--muted-ink); }
+  .action-item.is-destructive, .action-item.is-destructive svg { color: var(--red); }
+  .menu-separator { height: 1px; margin: 5px 6px; background: var(--hairline); }
+
+  /* ===== 集計行（下端固定） ===== */
+  tfoot td {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    height: 40px;
+    padding: 0 14px;
+    background: var(--header-bg);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-top: 1px solid var(--hairline);
+    font-size: 12.5px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  tfoot td.pinned { z-index: 4; background: linear-gradient(var(--header-bg), var(--header-bg)), var(--card); color: var(--muted-ink); font-size: 12px; }
+  tfoot td.align-right { text-align: right; }
+  tfoot td.is-aggregatable { cursor: pointer; transition: background-color 0.15s; }
+  tfoot td.is-aggregatable:hover { background-color: var(--fill-hover); }
+  .agg-label { margin-right: 6px; font-size: 11px; color: var(--subtle-ink); }
+  .agg-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .agg-add { font-size: 11.5px; color: var(--subtle-ink); opacity: 0; transition: opacity 0.15s; }
+  tfoot:hover .agg-add { opacity: 1; }
+  tfoot td.is-open { background-color: var(--fill); }
+
+  /* ===== プレビュー専用：テーマ切替（実装時は不要） ===== */
+  .preview-theme { flex-shrink: 0; }
+
+  @media (max-width: 720px) {
+    :root { --page-gutter: 16px; }
+    .page-description { display: none; }
+    .hints, .sheet-footer .keys { display: none; }
+    .menu { width: min(272px, calc(100vw - 24px)); }
+  }
+</style>
+<link rel="stylesheet" href="../styles/primitives.css">
+<link rel="stylesheet" href="../styles/samples.css">
+</head>
+<body data-page="table">
+  <main class="page">
+    <header class="page-header">
+      <div class="page-heading">
+        <h1 class="page-title">テーブルビュー</h1>
+        <p class="page-description" title="管理中のSNSアカウントの稼働状況と実績">管理中のSNSアカウントの稼働状況と実績</p>
+      </div>
+      <div class="page-actions">
+      <!-- プレビュー専用 -->
+      <div class="segmented preview-theme" id="theme-switch" role="radiogroup" aria-label="テーマ切替（プレビュー用）" style="--count:3;--index:0">
+        <button type="button" role="radio" data-value="auto" aria-checked="true">自動</button>
+        <button type="button" role="radio" data-value="light" aria-checked="false">ライト</button>
+        <button type="button" role="radio" data-value="dark" aria-checked="false">ダーク</button>
+      </div>
+      <button type="button" class="ui-button" data-variant="primary" data-density="compact" id="page-add" aria-label="アカウントを追加">＋ 追加</button>
+      <!-- ページ全体の補助操作 -->
+      <button type="button" class="icon-btn more-btn" id="page-more" aria-haspopup="menu" aria-expanded="false" aria-label="その他の操作" title="その他の操作">
+        <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>
+      </button>
+      </div>
+    </header>
+
+    <section class="table-card" aria-label="テーブルビュー">
+      <div class="table-scroll" id="scroll">
+        <table>
+          <colgroup id="colgroup"></colgroup>
+          <thead><tr id="head-row"></tr></thead>
+          <tbody id="body"></tbody>
+          <tfoot id="foot"></tfoot>
+        </table>
+      </div>
+      <footer class="table-footer" id="footer"></footer>
+    </section>
+  </main>
+
+  <!-- 絞り込み / セル選択編集メニュー -->
+  <div class="menu" id="menu" hidden role="dialog"></div>
+  <!-- セル上の入力欄 -->
+  <div class="cell-editor" id="cell-editor" hidden><input type="text" autocomplete="off" aria-label="セルを編集"></div>
+
+  <!-- 詳細シート -->
+  <div class="backdrop" id="backdrop"></div>
+  <aside class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="アカウント詳細" tabindex="-1" inert>
+    <header class="sheet-header">
+      <button type="button" class="icon-btn" data-nav="-1" title="前のアカウント（↑）" aria-label="前のアカウント">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>
+      </button>
+      <button type="button" class="icon-btn" data-nav="1" title="次のアカウント（↓）" aria-label="次のアカウント">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>
+      </button>
+      <span class="sheet-pos" id="sheet-pos"></span>
+      <!-- この行に対する操作はすべてここに入れる -->
+      <button type="button" class="icon-btn more-btn" id="row-more" aria-haspopup="menu" aria-expanded="false" aria-label="このアカウントの操作" title="このアカウントの操作">
+        <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>
+      </button>
+      <button type="button" class="icon-btn close" data-close title="閉じる（esc）" aria-label="閉じる">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>
+      </button>
+    </header>
+    <div class="sheet-body" id="sheet-body"></div>
+    <footer class="sheet-footer">
+      <span class="keys"><kbd>↑</kbd> <kbd>↓</kbd> 前後へ移動</span>
+      <span class="gap keys"></span>
+      <span class="keys"><kbd>esc</kbd> 閉じる</span>
+      <span class="autosave">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>
+        変更は見本内に反映されます
+      </span>
+    </footer>
+  </aside>
+
+<script type="module">
+import { mountShell, showToast as sharedToast, setTheme } from '../samples/ui.mjs';
+mountShell('table');
+/* ============================================================
+ * マスタ・サンプルデータ
+ * ============================================================ */
+const PLATFORMS = ['Instagram', 'TikTok', 'YouTube', 'X'];
+const STATUSES = ['運用中', '準備中', '停止中', '解約'];
+const PEOPLE = [
+  { name: '佐藤 美咲', email: 'misaki.sato@example.com' },
+  { name: '鈴木 健太', email: 'kenta.suzuki@example.com' },
+  { name: '高橋 葵', email: 'aoi.takahashi@example.com' },
+  { name: '田中 翔', email: 'sho.tanaka@example.com' },
+  { name: '伊藤 陽菜', email: 'hina.ito@example.com' },
+  { name: '山本 蓮', email: 'ren.yamamoto@example.com' },
+  { name: '中村 結衣', email: 'yui.nakamura@example.com' },
+  { name: '小林 大輔', email: 'daisuke.kobayashi@example.com' },
+];
+const OWNERS = PEOPLE.slice(0, 6).map((p) => p.name);
+const TAG_COLOR = {
+  Instagram: 'var(--brand-instagram)', TikTok: 'var(--ink)', YouTube: 'var(--brand-youtube)', X: 'var(--muted-ink)',
+  '運用中': 'var(--green)', '準備中': 'var(--blue)', '停止中': 'var(--orange)', '解約': 'var(--subtle-ink)',
+};
+
+/* ============================================================
+ * 列定義
+ *   type    : 絞り込みUIと比較ロジック（text / number / date / tag）
+ *   editor  : 手動入力の列のみ指定（text / number / date / select / multiselect / person）
+ *             指定なし = 自動取得で編集不可
+ *   primary : 左端固定＋クリックで詳細シート（セル上では編集しない）
+ *   display : tag 列の見せ方（pill / status / person）
+ *   hero    : 詳細シートのタイトル下に表示する
+ *   aggregate : 数値列の集計の初期値（sum / avg / max / min）。集計行のセルから変更可能
+ * ============================================================ */
+const COLUMNS = [
+  { key: 'name',       label: 'アカウント名',     type: 'text',   width: 240, primary: true, editor: 'text' },
+  { key: 'status',     label: 'ステータス',       type: 'tag',    width: 118, editor: 'select', options: STATUSES, display: 'status', hero: true },
+  { key: 'platform',   label: 'プラットフォーム', type: 'tag',    width: 200, editor: 'multiselect', options: PLATFORMS, display: 'pill', hero: true },
+  { key: 'owner',      label: '担当者',           type: 'tag',    width: 140, editor: 'person', options: PEOPLE.map((p) => p.name), display: 'person' },
+  { key: 'revenue',    label: '月間売上',         type: 'number', width: 128, editor: 'number', prefix: '¥', unit: '円', aggregate: 'sum' },
+  { key: 'startedAt',  label: '契約開始日',       type: 'date',   width: 128, editor: 'date' },
+  { key: 'followers',  label: 'フォロワー',       type: 'number', width: 118, unit: '人', aggregate: 'sum' },
+  { key: 'posts',      label: '今月の投稿',       type: 'number', width: 108, unit: '件', aggregate: 'avg' },
+  { key: 'lastPostAt', label: '最終投稿',         type: 'date',   width: 116, relative: true },
+  { key: 'memo',       label: 'メモ',             type: 'text',   width: 280, editor: 'text', multiline: true },
+];
+
+/* 決定的な疑似乱数でサンプルデータを生成 */
+const rand = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+const BASE = new Date('2026-10-07');
+const daysAgo = (n) => { const d = new Date(BASE); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10); };
+const NAMES = ['渋谷カフェ巡り', 'HAMONI公式', '朝5分ストレッチ', '大人の週末ゴルフ', 'まいにち献立', '韓国コスメ研究所', 'キャンプ飯ラボ', '30代からの資産形成', 'ねこと暮らす', '福岡グルメ日記', '整体院こもれび', 'ミニマリストの部屋', '美容室Lumière', '筋トレ初心者部', '京都さんぽ', 'おうち英会話', '中古車ナビ', 'ペット防災ノート', '保育士あるある', '地方移住のリアル', '神戸パン屋めぐり', '社長の一日', 'ネイルサロンMIU', '不動産のホンネ', 'ゆる家計簿', '北海道スイーツ', '歯科医院さくら', '親子で知育', 'サウナ好きの記録', '韓国語ひとこと'];
+const MEMOS = ['', '', '', '月末にリール強化の提案予定', '撮影は隔週火曜', '', '請求書は月初に送付', 'ブランドガイドライン更新あり', '', '投稿時間を19時に変更済み', '担当者変更の引き継ぎ中'];
+const ROWS = NAMES.map((name, i) => {
+  const platform = [pick(PLATFORMS)];
+  if (rand() > 0.6) { const p = pick(PLATFORMS); if (!platform.includes(p)) platform.push(p); }
+  platform.sort((a, b) => PLATFORMS.indexOf(a) - PLATFORMS.indexOf(b));
+  return {
+    id: i + 1,
+    name,
+    status: pick(['運用中', '運用中', '運用中', '準備中', '停止中', '解約']),
+    platform,
+    owner: pick(OWNERS),
+    revenue: Math.round(rand() * 60) * 10000,
+    startedAt: daysAgo(Math.floor(rand() * 720) + 20),
+    followers: Math.round(Math.pow(rand(), 2) * 180000 + 800),
+    posts: Math.floor(rand() * 32),
+    lastPostAt: daysAgo(Math.floor(rand() * 60)),
+    memo: pick(MEMOS),
+  };
+});
+
+/* ============================================================
+ * 状態
+ * ============================================================ */
+const state = {
+  sort: null,        // { key, dir: 'asc' | 'desc' }
+  filters: {},       // key -> 型ごとのフィルター値
+  widths: Object.fromEntries(COLUMNS.map((c) => [c.key, c.width])),
+  aggregates: Object.fromEntries(COLUMNS.filter((c) => c.aggregate).map((c) => [c.key, c.aggregate])),
+  menu: null,        // { kind: 'filter', key } | { kind: 'edit', key, rowId, editor, original }
+  activeId: null,    // キーボード操作の対象行
+  sheetId: null,     // 詳細シートで表示中の行
+};
+let editing = null;  // セル上の入力欄で編集中の { rowId, col }
+
+/* ============================================================
+ * ユーティリティ
+ * ============================================================ */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const asArray = (v) => (Array.isArray(v) ? v : v == null || v === '' ? [] : [v]);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const getRow = (id) => ROWS.find((r) => r.id === id);
+const getCol = (key) => COLUMNS.find((c) => c.key === key);
+const hue = (s) => { let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)) % 360; return h; };
+const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
+const isInlineEditable = (c) => c.editor && !c.primary;
+
+const nf = new Intl.NumberFormat('ja-JP');
+/* カンマ等を取り除いて数値化。空なら null */
+const parseNum = (s) => { const d = String(s ?? '').replace(/[^\d]/g, ''); return d === '' ? null : Number(d); };
+const fmtNum = (col, v) => `${col.prefix ?? ''}${nf.format(v)}`;
+const fmtNumWithUnit = (col, v) => (col.prefix ? fmtNum(col, v) : `${nf.format(v)}${col.unit ?? ''}`);
+const fmtDate = (s) => (s ? s.replaceAll('-', '/') : '—');
+const fmtShortDate = (s) => `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}`;
+function fmtRelative(s) {
+  if (!s) return '—';
+  const d = Math.round((BASE - new Date(s)) / 864e5);
+  if (d <= 0) return '今日';
+  if (d === 1) return '昨日';
+  if (d < 7) return `${d}日前`;
+  if (d < 28) return `${Math.floor(d / 7)}週間前`;
+  return fmtDate(s);
+}
+
+const ICON = {
+  chevron: '<svg class="th-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>',
+  filter: '<svg class="th-icon filter" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2.5 4h11M4.5 8h7M6.5 12h3"/></svg>',
+  asc: '<svg class="th-icon sort" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V3M4 7l4-4 4 4"/></svg>',
+  desc: '<svg class="th-icon sort" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v10M4 9l4 4 4-4"/></svg>',
+  open: '<svg class="open-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5 10.5 8 6 12.5"/></svg>',
+  caret: '<svg class="cell-caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 6.5 8 10l3.5-3.5"/></svg>',
+  updown: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6l3-3 3 3M5 10l3 3 3-3"/></svg>',
+  search: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/></svg>',
+  check: '<svg class="check-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>',
+  x: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg>',
+};
+
+/* セグメンテッドコントロールの描画。items: [value, label][]、value: 選択値（未選択は null） */
+function segmentedHTML(items, value, { block = false, attrs = '' } = {}) {
+  const index = items.findIndex(([v]) => v === value);
+  return `<div class="segmented${block ? ' is-block' : ''}" role="radiogroup" style="--count:${items.length};--index:${index}" ${attrs}>${items
+    .map(([v, l]) => `<button type="button" role="radio" data-value="${esc(v)}" aria-checked="${v === value}">${esc(l)}</button>`)
+    .join('')}</div>`;
+}
+/* セグメンテッドの選択を切り替える（thumb をスライド） */
+function selectSegment(btn) {
+  const group = btn.parentElement;
+  const buttons = [...group.children];
+  buttons.forEach((b) => b.setAttribute('aria-checked', String(b === btn)));
+  group.style.setProperty('--index', buttons.indexOf(btn));
+}
+
+/* tag 列の値1つ分の表示 */
+function tagHTML(col, t) {
+  if (col.display === 'status') return `<span class="status"><i class="dot" style="--c:${TAG_COLOR[t]}"></i>${esc(t)}</span>`;
+  if (col.display === 'person') return `<span class="person"><span class="avatar xs" style="--h:${hue(t)}">${esc(t.slice(0, 1))}</span>${esc(t)}</span>`;
+  return `<span class="pill"><i class="dot" style="--c:${TAG_COLOR[t] ?? 'var(--subtle-ink)'}"></i>${esc(t)}</span>`;
+}
+
+/* ============================================================
+ * 絞り込み・並び替え
+ * ============================================================ */
+const defaultFilter = (col) => ({
+  text: { q: '' },
+  number: { op: 'gte', a: '', b: '' },
+  date: { from: '', to: '', preset: null },
+  tag: { values: [] },
+}[col.type]);
+
+function isActive(col, f) {
+  if (!f) return false;
+  if (col.type === 'text') return !!f.q?.trim();
+  if (col.type === 'number') return f.op === 'between' ? f.a !== '' || f.b !== '' : f.a !== '';
+  if (col.type === 'date') return !!(f.from || f.to);
+  if (col.type === 'tag') return f.values.length > 0;
+  return false;
+}
+function match(col, f, v) {
+  switch (col.type) {
+    case 'text': return String(v).toLowerCase().includes(f.q.trim().toLowerCase());
+    case 'number': {
+      const a = parseNum(f.a);
+      const b = parseNum(f.b);
+      if (f.op === 'gte') return v >= a;
+      if (f.op === 'lt') return v < a;
+      return (a === null || v >= a) && (b === null || v <= b);
+    }
+    case 'date': return (!f.from || v >= f.from) && (!f.to || v <= f.to);
+    case 'tag': return asArray(v).some((t) => f.values.includes(t));
+  }
+  return true;
+}
+function visibleRows() {
+  let rows = ROWS.filter((r) => COLUMNS.every((c) => !isActive(c, state.filters[c.key]) || match(c, state.filters[c.key], r[c.key])));
+  if (state.sort) {
+    const { key, dir } = state.sort;
+    const m = dir === 'asc' ? 1 : -1;
+    rows = [...rows].sort((x, y) => {
+      const a = asArray(x[key])[0] ?? '';
+      const b = asArray(y[key])[0] ?? '';
+      return (typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'ja')) * m;
+    });
+  }
+  return rows;
+}
+
+/* ============================================================
+ * 描画：ヘッダー / ボディ / フッター
+ * ============================================================ */
+const headCell = (key) => $('head-row').querySelector(`th[data-key="${key}"]`);
+const bodyCell = (rowId, key) => $('body').querySelector(`tr[data-id="${rowId}"] td[data-key="${key}"]`);
+
+function renderHead() {
+  $('colgroup').innerHTML = COLUMNS.map((c) => `<col style="width:${state.widths[c.key]}px">`).join('');
+  $('head-row').innerHTML = COLUMNS.map((c) => {
+    const filtered = isActive(c, state.filters[c.key]);
+    const sorted = state.sort?.key === c.key;
+    const open = state.menu?.kind === 'filter' && state.menu.key === c.key;
+    const cls = [c.primary && 'pinned', c.type === 'number' && 'align-right', filtered && 'is-filtered', sorted && 'is-sorted', open && 'is-open'].filter(Boolean).join(' ');
+    const icons = (sorted ? ICON[state.sort.dir] : '') + (filtered ? ICON.filter : '') + (!sorted && !filtered ? ICON.chevron : '');
+    return `<th class="${cls}" data-key="${c.key}">
+      <div class="th-inner" role="button" tabindex="0" aria-haspopup="dialog"><span class="th-label">${c.label}</span>${icons}</div>
+      <div class="resizer" data-key="${c.key}" aria-hidden="true"></div>
+    </th>`;
+  }).join('');
+}
+
+function cellHTML(col, row) {
+  const v = row[col.key];
+  const cls = [];
+  let inner;
+  if (col.primary) {
+    cls.push('pinned', 'cell-primary');
+    inner = `<div class="name-cell"><span class="avatar" style="--h:${hue(v)}">${esc(v.slice(0, 1))}</span><span class="name-text">${esc(v)}</span>${ICON.open}</div>`;
+  } else if (col.type === 'tag') {
+    inner = asArray(v).map((t) => tagHTML(col, t)).join(' ') || '<span class="placeholder">未設定</span>';
+  } else if (col.type === 'number') {
+    cls.push('align-right', 'num');
+    inner = fmtNum(col, v);
+  } else if (col.type === 'date') {
+    cls.push('num');
+    if (!col.editor) cls.push('cell-muted');
+    inner = col.relative ? `<span title="${fmtDate(v)}">${fmtRelative(v)}</span>` : fmtDate(v);
+  } else {
+    inner = v ? esc(v) : '<span class="placeholder">—</span>';
+  }
+  if (isInlineEditable(col)) cls.push('is-editable');
+  if (['select', 'multiselect', 'person'].includes(col.editor)) inner = `<div class="cell-flex">${inner}${ICON.caret}</div>`;
+  const detailAttrs = isInlineEditable(col) ? '' : ` tabindex="0" aria-label="${esc(row.name)}の詳細（${esc(col.label)}）"`;
+  return `<td class="${cls.join(' ')}" data-key="${col.key}"${detailAttrs}${isInlineEditable(col) ? ` data-editor="${col.editor}"` : ''}>${inner}</td>`;
+}
+
+function renderBody() {
+  const rows = visibleRows();
+  $('body').innerHTML = rows.length
+    ? rows.map((r) => `<tr data-id="${r.id}"${r.id === state.activeId ? ' class="is-active"' : ''}>${COLUMNS.map((c) => cellHTML(c, r)).join('')}</tr>`).join('')
+    : `<tr><td colspan="${COLUMNS.length}" class="empty"><strong>該当するアカウントがありません</strong>絞り込み条件を変更してください</td></tr>`;
+  renderFooter(rows.length);
+  renderAggregates(rows);
+}
+
+function summarize(col, f) {
+  switch (col.type) {
+    case 'text': return `「${f.q.trim()}」を含む`;
+    case 'number': {
+      const u = (n) => fmtNumWithUnit(col, parseNum(n));
+      if (f.op === 'gte') return `${u(f.a)}以上`;
+      if (f.op === 'lt') return `${u(f.a)}未満`;
+      return `${f.a !== '' ? u(f.a) : ''}〜${f.b !== '' ? u(f.b) : ''}`;
+    }
+    case 'date': return `${f.from ? fmtShortDate(f.from) : ''}〜${f.to ? fmtShortDate(f.to) : ''}`;
+    case 'tag': return f.values.join('・');
+  }
+}
+function renderFooter(count) {
+  const active = COLUMNS.filter((c) => isActive(c, state.filters[c.key]));
+  const total = ROWS.length;
+  $('footer').innerHTML =
+    `<span class="count">${count === total ? `全${total}件` : `${count}件 / 全${total}件`}</span>` +
+    active.map((c) => `<button type="button" class="chip" data-clear="${c.key}" title="この条件を解除">${c.label}: ${esc(summarize(c, state.filters[c.key]))}${ICON.x}</button>`).join('') +
+    (active.length > 1 ? `<button type="button" class="link" data-clear="*">すべて解除</button>` : '') +
+    `<button type="button" class="link" data-undo-latest ${latestTableUndo ? '' : 'hidden'}>直前の変更を取り消す</button>` +
+    `<span class="hints"><kbd>↑</kbd><kbd>↓</kbd>&nbsp;移動<span class="gap"></span><kbd>⏎</kbd>&nbsp;詳細を開く</span>`;
+}
+
+/* ============================================================
+ * 集計行（表示中の行 = 絞り込み後の行が対象）
+ * ============================================================ */
+const AGGREGATES = {
+  sum: { label: '合計', fn: (xs) => xs.reduce((a, b) => a + b, 0) },
+  avg: { label: '平均', fn: (xs) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) },
+  max: { label: '最大', fn: (xs) => Math.max(...xs) },
+  min: { label: '最小', fn: (xs) => Math.min(...xs) },
+};
+function aggregateValue(col, kind, rows) {
+  const xs = rows.map((r) => r[col.key]).filter((v) => typeof v === 'number');
+  return xs.length ? fmtNum(col, AGGREGATES[kind].fn(xs)) : '—';
+}
+function renderAggregates(rows = visibleRows()) {
+  const cols = COLUMNS.filter((c) => c.type === 'number');
+  if (!cols.length) { $('foot').innerHTML = ''; return; }
+  $('foot').innerHTML = `<tr>${COLUMNS.map((c) => {
+    if (c.primary) return `<td class="pinned">集計（${rows.length}件）</td>`;
+    if (c.type !== 'number') return '<td></td>';
+    const kind = state.aggregates[c.key];
+    const open = state.menu?.kind === 'agg' && state.menu.key === c.key;
+    const inner = kind
+      ? `<span class="agg-label">${AGGREGATES[kind].label}</span><span class="agg-value">${aggregateValue(c, kind, rows)}</span>`
+      : '<span class="agg-add">集計</span>';
+    return `<td class="align-right is-aggregatable${open ? ' is-open' : ''}" data-agg-key="${c.key}" title="クリックで集計方法を変更">${inner}</td>`;
+  }).join('')}</tr>`;
+}
+function openAggMenu(td) {
+  closeCellEditor(true);
+  closeMenu();
+  const col = getCol(td.dataset.aggKey);
+  const rows = visibleRows();
+  const cur = state.aggregates[col.key] ?? null;
+  state.menu = { kind: 'agg', key: col.key, anchor: td };
+  const items = [[null, 'なし', ''], ...Object.entries(AGGREGATES).map(([k, a]) => [k, a.label, aggregateValue(col, k, rows)])];
+  showMenu(
+    `<div class="menu-list">${items.map(([k, label, preview]) => `<button type="button" class="menu-item" data-agg="${k ?? ''}" aria-checked="${k === cur}">${ICON.check}${label}<span class="count">${preview}</span></button>`).join('')}</div>`,
+    td.getBoundingClientRect(),
+    { variant: 'compact', alignRight: true },
+  );
+  td.classList.add('is-open');
+  // 下端に固定された行なので、メニューは上に開く
+  const r = td.getBoundingClientRect();
+  menu.style.top = `${Math.max(12, r.top - menu.offsetHeight - 6)}px`;
+}
+function onAggMenuClick(e) {
+  const item = e.target.closest('[data-agg]');
+  if (!item) return;
+  const key = state.menu.key;
+  if (item.dataset.agg) state.aggregates[key] = item.dataset.agg;
+  else delete state.aggregates[key];
+  closeMenu();
+}
+$('foot').addEventListener('click', (e) => {
+  const td = e.target.closest('[data-agg-key]');
+  if (!td) return;
+  if (state.menu?.kind === 'agg' && state.menu.key === td.dataset.aggKey) closeMenu();
+  else openAggMenu(td);
+});
+
+/* ============================================================
+ * 「…」アクションメニュー
+ *   補助操作はここに定義を足す。新規追加は見出しの独立ボタンから実行する
+ * ============================================================ */
+const ACTION_ICON = {
+  plus: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>',
+  download: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>',
+  reset: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a5 5 0 1 0 1.5-3.6M3 2.5v2.5h2.5"/></svg>',
+  copy: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="5" y="5" width="8.5" height="8.5" rx="2"/><path d="M11 5V4a1.5 1.5 0 0 0-1.5-1.5h-5A1.5 1.5 0 0 0 3 4v5.5A1.5 1.5 0 0 0 4.5 11H5"/></svg>',
+  trash: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11M6 4.5V3h4v1.5M4 4.5l.7 8.2a1.5 1.5 0 0 0 1.5 1.3h3.6a1.5 1.5 0 0 0 1.5-1.3l.7-8.2"/></svg>',
+};
+/* ページ全体の操作（タイトル右の「…」） */
+const PAGE_ACTIONS = [
+  { id: 'export', label: '表示中の行をCSVで書き出し', icon: 'download', run: exportCsv },
+  { separator: true },
+  { id: 'reset-view', label: '並び替え・絞り込みをリセット', icon: 'reset', run: resetView },
+];
+/* 1行に対する操作（詳細シート右上の「…」） */
+const ROW_ACTIONS = [
+  { id: 'duplicate', label: '複製', icon: 'copy', run: duplicateRow },
+  { separator: true },
+  { id: 'delete', label: 'このアカウントを削除', icon: 'trash', destructive: true, run: deleteRow },
+];
+
+function openActionMenu(button, actions) {
+  closeCellEditor(true);
+  closeMenu();
+  state.menu = { kind: 'actions', anchor: button, actions, fromSheet: button.id === 'row-more' };
+  button.setAttribute('aria-expanded', 'true');
+  showMenu(
+    `<div class="menu-list" role="menu">${actions.map((a, i) => a.separator
+      ? '<div class="menu-separator" role="separator"></div>'
+      : `<button type="button" class="menu-item action-item${a.destructive ? ' is-destructive' : ''}" role="menuitem" data-action="${i}">${ACTION_ICON[a.icon] ?? ''}${a.label}</button>`).join('')}</div>`,
+    button.getBoundingClientRect(),
+    { variant: 'actions', alignRight: true },
+  );
+}
+function onActionMenuClick(e) {
+  const item = e.target.closest('[data-action]');
+  if (!item) return;
+  const action = state.menu.actions[Number(item.dataset.action)];
+  closeMenu();
+  action.run();
+}
+$('page-add').addEventListener('click', () => {
+  closeCellEditor(true);
+  closeMenu();
+  addRow();
+});
+$('page-more').addEventListener('click', (e) => {
+  if (state.menu?.anchor === e.currentTarget) closeMenu();
+  else openActionMenu(e.currentTarget, PAGE_ACTIONS);
+});
+$('row-more').addEventListener('click', (e) => {
+  if (state.menu?.anchor === e.currentTarget) closeMenu();
+  else openActionMenu(e.currentTarget, ROW_ACTIONS);
+});
+
+/* --- 各アクションの処理（実装時は Server Action を呼ぶ） --- */
+const nextId = () => Math.max(0, ...ROWS.map((r) => r.id)) + 1;
+function addRow() {
+  const row = {
+    id: nextId(), name: '新しいアカウント', status: '準備中', platform: [], owner: '',
+    revenue: 0, startedAt: BASE.toISOString().slice(0, 10), followers: 0, posts: 0, lastPostAt: null, memo: '',
+  };
+  ROWS.unshift(row);
+  // 絞り込み条件に合わず追加した行が見えなくなる場合は、絞り込みを解除して表示する
+  const hidden = !visibleRows().includes(row);
+  if (hidden) state.filters = {};
+  renderHead();
+  renderBody();
+  if (hidden) showToast('追加した行を表示するため、絞り込みを解除しました');
+  openSheet(row.id);
+  const name = sheet.querySelector('.hero-name');
+  name.focus();
+  name.select();
+}
+function duplicateRow() {
+  const src = getRow(state.sheetId);
+  const row = { ...structuredClone(src), id: nextId(), name: `${src.name}（コピー）` };
+  ROWS.splice(ROWS.indexOf(src) + 1, 0, row);
+  renderBody();
+  state.sheetId = row.id;
+  setActive(row.id, { scroll: true });
+  renderSheet();
+  showToast(`「${src.name}」を複製しました`, () => {
+    ROWS.splice(ROWS.indexOf(row), 1);
+    if (state.sheetId === row.id) closeSheet();
+    renderBody();
+  });
+}
+function deleteRow() {
+  const row = getRow(state.sheetId);
+  const index = ROWS.indexOf(row);
+  // 削除後は次の行（なければ前の行）をシートに表示する
+  const rows = visibleRows();
+  const i = rows.indexOf(row);
+  const neighbor = rows[i + 1] ?? rows[i - 1];
+  ROWS.splice(index, 1);
+  renderBody();
+  if (neighbor) {
+    state.sheetId = neighbor.id;
+    setActive(neighbor.id, { scroll: true });
+    renderSheet();
+  } else {
+    closeSheet();
+  }
+  showToast(`「${row.name}」を削除しました`, () => {
+    ROWS.splice(index, 0, row);
+    renderBody();
+    if (state.sheetId != null) renderSheet();
+  });
+}
+function exportCsv() {
+  const rows = visibleRows();
+  const cell = (v) => `"${String(Array.isArray(v) ? v.join(' / ') : v ?? '').replace(/"/g, '""')}"`;
+  const csv = [COLUMNS.map((c) => cell(c.label)).join(','), ...rows.map((r) => COLUMNS.map((c) => cell(r[c.key])).join(','))].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv' }));
+  a.download = 'accounts.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  showToast(`${rows.length}件をCSVで書き出しました`);
+}
+function resetView() {
+  state.filters = {};
+  state.sort = null;
+  state.widths = Object.fromEntries(COLUMNS.map((c) => [c.key, c.width]));
+  renderHead();
+  renderBody();
+  showToast('並び替え・絞り込み・列幅をリセットしました');
+}
+
+/* ============================================================
+ * メニュー共通（表示位置の計算と開閉）
+ * ============================================================ */
+const menu = $('menu');
+
+function showMenu(html, rect, { variant = '', alignRight = false } = {}) {
+  menu.className = `menu${variant ? ` is-${variant}` : ''}`;
+  menu.innerHTML = html;
+  menu.hidden = false;
+  placeMenu(rect, alignRight);
+}
+function placeMenu(rect, alignRight) {
+  const w = menu.offsetWidth;
+  const h = menu.offsetHeight;
+  const left = clamp(alignRight ? rect.right - w : rect.left, 12, innerWidth - w - 12);
+  let top = rect.bottom + 6;
+  if (top + h > innerHeight - 12 && rect.top - h - 6 > 12) top = rect.top - h - 6;
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+function closeMenu() {
+  const m = state.menu;
+  if (!m) return;
+  state.menu = null;
+  menu.hidden = true;
+  if (m.kind === 'filter') renderHead();
+  if (m.kind === 'agg') renderAggregates();
+  if (m.kind === 'actions') m.anchor.setAttribute('aria-expanded', 'false');
+  // 複数選択は閉じた時点でまとめて「保存しました」を出す
+  if (m.kind === 'edit' && m.editor === 'multiselect' && !same(getRow(m.rowId)[m.key], m.original)) notifySaved(m.rowId, m.key, m.original);
+}
+/* メニューを開いた元の要素か（同じ要素の再クリックは開閉トグルにする） */
+function isMenuAnchor(target) {
+  const m = state.menu;
+  if (m.anchor) return m.anchor.contains(target);
+  if (m.kind === 'filter') return !target.closest('.resizer') && target.closest('th')?.dataset.key === m.key;
+  const td = target.closest('td');
+  return td?.dataset.key === m.key && Number(td.parentElement.dataset.id) === m.rowId;
+}
+
+/* ============================================================
+ * ヘッダーメニュー：並び替え＋絞り込み
+ * ============================================================ */
+function sortLabels(col) {
+  if (col.type === 'number') return ['小さい順', '大きい順'];
+  if (col.type === 'date') return ['古い順', '新しい順'];
+  return ['昇順', '降順'];
+}
+
+function filterMenuHTML(col) {
+  const f = state.filters[col.key] ?? defaultFilter(col);
+  const dir = state.sort?.key === col.key ? state.sort.dir : null;
+  const [ascLabel, descLabel] = sortLabels(col);
+  let body = '';
+
+  if (col.type === 'text') {
+    body = `<div class="menu-label">絞り込み</div>
+      <input class="field" data-f="q" type="text" placeholder="${col.label}を含む…" value="${esc(f.q)}" autocomplete="off">`;
+  }
+  if (col.type === 'number') {
+    const input = (k, ph) => `<div class="field-wrap"><input class="field num" data-f="${k}" type="text" inputmode="numeric" data-numeric autocomplete="off" placeholder="${ph}" value="${f[k]}">${col.unit ? `<span class="unit">${col.unit}</span>` : ''}</div>`;
+    body = `<div class="menu-label">絞り込み</div>
+      ${segmentedHTML([['gte', '以上'], ['lt', '未満'], ['between', '範囲']], f.op, { block: true, attrs: 'data-group="op"' })}
+      <div class="field-row">${f.op === 'between' ? `${input('a', '最小')}<span class="sep">〜</span>${input('b', '最大')}` : input('a', '値を入力')}</div>`;
+  }
+  if (col.type === 'date') {
+    const presets = [['7d', '過去7日'], ['30d', '過去30日'], ['thisMonth', '今月'], ['lastMonth', '先月'], ['thisYear', '今年']];
+    body = `<div class="menu-label">期間</div>
+      <div class="presets">${presets.map(([v, l]) => `<button type="button" class="preset" data-preset="${v}" aria-pressed="${f.preset === v}">${l}</button>`).join('')}</div>
+      <div class="field-row">
+        <input class="field num" data-f="from" type="date" value="${f.from}" aria-label="開始日">
+        <span class="sep">〜</span>
+        <input class="field num" data-f="to" type="date" value="${f.to}" aria-label="終了日">
+      </div>`;
+  }
+  if (col.type === 'tag') {
+    const counts = {};
+    ROWS.forEach((r) => asArray(r[col.key]).forEach((t) => (counts[t] = (counts[t] ?? 0) + 1)));
+    const options = col.options ?? Object.keys(counts);
+    body = `<div class="menu-label">表示する${col.label}</div>
+      <div class="menu-list">${options.map((t) => `<button type="button" class="menu-item" data-tag="${esc(t)}" aria-checked="${f.values.includes(t)}">${ICON.check}${tagHTML(col, t)}<span class="count">${counts[t] ?? 0}</span></button>`).join('')}</div>`;
+  }
+
+  return `
+    <div class="menu-section">
+      <div class="menu-label">並び替え</div>
+      ${segmentedHTML([['asc', ascLabel], ['desc', descLabel]], dir, { block: true, attrs: 'data-group="sort"' })}
+    </div>
+    <div class="menu-section">${body}</div>
+    <div class="menu-footer"><button type="button" data-reset ${!isActive(col, state.filters[col.key]) && !dir ? 'disabled' : ''}>リセット</button></div>`;
+}
+
+function openFilterMenu(key, { focus = true } = {}) {
+  closeCellEditor(true);
+  state.menu = { kind: 'filter', key };
+  renderHead();
+  const col = getCol(key);
+  showMenu(filterMenuHTML(col), headCell(key).getBoundingClientRect(), { alignRight: col.type === 'number' });
+  if (focus) menu.querySelector('input.field')?.focus();
+}
+
+/* 入力中のフォーカスを保つため、テキスト入力ではメニュー自体は作り直さない */
+function updateFilter(key, patch, { rerender = false } = {}) {
+  const col = getCol(key);
+  state.filters[key] = { ...(state.filters[key] ?? defaultFilter(col)), ...patch };
+  renderHead();
+  renderBody();
+  if (rerender) openFilterMenu(key, { focus: false });
+  else menu.querySelector('[data-reset]').disabled = !isActive(col, state.filters[key]) && state.sort?.key !== key;
+}
+
+function presetRange(p) {
+  const iso = (d) => d.toISOString().slice(0, 10);
+  const y = BASE.getFullYear();
+  const m = BASE.getMonth();
+  switch (p) {
+    case '7d': return { from: daysAgo(6), to: iso(BASE) };
+    case '30d': return { from: daysAgo(29), to: iso(BASE) };
+    case 'thisMonth': return { from: iso(new Date(Date.UTC(y, m, 1))), to: iso(new Date(Date.UTC(y, m + 1, 0))) };
+    case 'lastMonth': return { from: iso(new Date(Date.UTC(y, m - 1, 1))), to: iso(new Date(Date.UTC(y, m, 0))) };
+    case 'thisYear': return { from: `${y}-01-01`, to: `${y}-12-31` };
+  }
+}
+
+function onFilterMenuClick(e) {
+  const key = state.menu.key;
+  const sortBtn = e.target.closest('[data-group="sort"] button');
+  if (sortBtn) {
+    const dir = sortBtn.dataset.value;
+    state.sort = state.sort?.key === key && state.sort.dir === dir ? null : { key, dir };
+    renderBody();
+    openFilterMenu(key, { focus: false });
+    return;
+  }
+  const opBtn = e.target.closest('[data-group="op"] button');
+  if (opBtn) {
+    updateFilter(key, { op: opBtn.dataset.value, b: '' }, { rerender: true });
+    menu.querySelector('input.field')?.focus();
+    return;
+  }
+  const presetBtn = e.target.closest('[data-preset]');
+  if (presetBtn) {
+    const p = presetBtn.dataset.preset;
+    const off = state.filters[key]?.preset === p;
+    updateFilter(key, off ? { from: '', to: '', preset: null } : { ...presetRange(p), preset: p }, { rerender: true });
+    return;
+  }
+  const tagBtn = e.target.closest('[data-tag]');
+  if (tagBtn) {
+    const t = tagBtn.dataset.tag;
+    const cur = state.filters[key]?.values ?? [];
+    const values = cur.includes(t) ? cur.filter((x) => x !== t) : [...cur, t];
+    tagBtn.setAttribute('aria-checked', String(values.includes(t)));
+    updateFilter(key, { values });
+    return;
+  }
+  if (e.target.closest('[data-reset]')) {
+    delete state.filters[key];
+    if (state.sort?.key === key) state.sort = null;
+    renderBody();
+    openFilterMenu(key, { focus: false });
+  }
+}
+
+menu.addEventListener('input', (e) => {
+  if (state.menu?.kind !== 'filter') return;
+  const t = e.target;
+  if (!t.dataset.f) return;
+  const patch = { [t.dataset.f]: t.value };
+  if (t.type === 'date') {
+    patch.preset = null;
+    menu.querySelectorAll('[data-preset]').forEach((b) => b.setAttribute('aria-pressed', 'false'));
+  }
+  updateFilter(state.menu.key, patch);
+});
+
+/* ============================================================
+ * セル編集
+ * ============================================================ */
+/* 値の更新（即時保存）。保存処理は実装時に Server Action へ置き換える */
+function commit(rowId, key, value, { silent = false, refreshSheet = false } = {}) {
+  const row = getRow(rowId);
+  const prev = row[key];
+  if (same(prev, value)) return;
+  row[key] = value;
+  renderBody();
+  bodyCell(rowId, key)?.classList.add('flash');
+  if (state.sheetId === rowId) refreshSheet ? renderSheet() : renderHero();
+  if (!silent) notifySaved(rowId, key, prev);
+}
+function notifySaved(rowId, key, prev) {
+  const row = getRow(rowId);
+  showToast(`「${row.name}」の${getCol(key).label}を更新しました`, () => {
+    row[key] = prev;
+    renderBody();
+    bodyCell(rowId, key)?.classList.add('flash');
+    if (state.sheetId === rowId) renderSheet();
+  });
+}
+
+/* --- select / multiselect：セル下のメニュー --- */
+function openEditMenu(td, row, col) {
+  closeCellEditor(true);
+  closeMenu();
+  state.menu = { kind: 'edit', key: col.key, rowId: row.id, editor: col.editor, original: structuredClone(row[col.key]) };
+  const cur = asArray(row[col.key]);
+  showMenu(
+    `<div class="menu-list">${col.options.map((o) => `<button type="button" class="menu-item" data-value="${esc(o)}" aria-checked="${cur.includes(o)}">${ICON.check}${tagHTML(col, o)}</button>`).join('')}</div>`,
+    td.getBoundingClientRect(),
+    { variant: 'compact' },
+  );
+}
+function onEditMenuClick(e) {
+  const item = e.target.closest('.menu-item');
+  if (!item) return;
+  const { rowId, key, editor } = state.menu;
+  const col = getCol(key);
+  const v = item.dataset.value;
+  if (editor === 'select') {
+    closeMenu();
+    commit(rowId, key, v);
+    return;
+  }
+  const cur = asArray(getRow(rowId)[key]);
+  const next = (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]).sort((a, b) => col.options.indexOf(a) - col.options.indexOf(b));
+  item.setAttribute('aria-checked', String(next.includes(v)));
+  commit(rowId, key, next, { silent: true });
+}
+
+/* --- person：名前・メールで検索できる候補リスト --- */
+function openPersonMenu(anchor, row, col, { fromSheet = false } = {}) {
+  closeCellEditor(true);
+  closeMenu();
+  state.menu = { kind: 'person', key: col.key, rowId: row.id, anchor, fromSheet, q: '', hi: 0, results: [] };
+  showMenu(
+    `<div class="combo-search">${ICON.search}<input class="combo-input" type="text" placeholder="名前またはメールで検索" autocomplete="off" aria-label="${col.label}を検索"></div>
+     <div class="menu-list combo-list" id="combo-list" role="listbox"></div>`,
+    anchor.getBoundingClientRect(),
+    { variant: 'combo', alignRight: fromSheet },
+  );
+  renderPersonList();
+  menu.querySelector('.combo-input').focus();
+}
+function personMatches(q) {
+  const norm = (s) => s.replace(/\s/g, '').toLowerCase();
+  const nq = norm(q);
+  return PEOPLE.filter((p) => !nq || norm(p.name).includes(nq) || p.email.toLowerCase().includes(nq));
+}
+/* 一致部分を強調 */
+function highlight(text, q) {
+  const i = q.trim() ? text.toLowerCase().indexOf(q.trim().toLowerCase()) : -1;
+  if (i < 0) return esc(text);
+  const n = q.trim().length;
+  return `${esc(text.slice(0, i))}<mark>${esc(text.slice(i, i + n))}</mark>${esc(text.slice(i + n))}`;
+}
+function renderPersonList() {
+  const m = state.menu;
+  const cur = getRow(m.rowId)[m.key];
+  m.results = personMatches(m.q);
+  m.hi = clamp(m.hi, 0, Math.max(0, m.results.length - 1));
+  $('combo-list').innerHTML = m.results.length
+    ? m.results.map((p, i) => `<button type="button" class="menu-item person-item${i === m.hi ? ' is-highlighted' : ''}" data-value="${esc(p.name)}" data-index="${i}" role="option" aria-checked="${p.name === cur}">
+        ${ICON.check}<span class="avatar xs" style="--h:${hue(p.name)}">${esc(p.name.slice(0, 1))}</span>
+        <span class="person-meta"><span class="person-name">${highlight(p.name, m.q)}</span><span class="person-email">${highlight(p.email, m.q)}</span></span>
+      </button>`).join('')
+    : `<div class="combo-empty">「${esc(m.q)}」に一致するメンバーがいません</div>`;
+  $('combo-list').querySelector('.is-highlighted')?.scrollIntoView({ block: 'nearest' });
+}
+function selectPerson(name) {
+  const { rowId, key, fromSheet } = state.menu;
+  closeMenu();
+  commit(rowId, key, name, { refreshSheet: fromSheet });
+  if (fromSheet) sheet.focus({ preventScroll: true });
+}
+function onPersonMenuClick(e) {
+  const item = e.target.closest('.person-item');
+  if (item) selectPerson(item.dataset.value);
+}
+menu.addEventListener('input', (e) => {
+  if (state.menu?.kind !== 'person' || !e.target.matches('.combo-input')) return;
+  state.menu.q = e.target.value;
+  state.menu.hi = 0;
+  renderPersonList();
+});
+menu.addEventListener('keydown', (e) => {
+  const m = state.menu;
+  if (m?.kind !== 'person') return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    e.preventDefault();
+    m.hi = clamp(m.hi + (e.key === 'ArrowDown' ? 1 : -1), 0, Math.max(0, m.results.length - 1));
+    renderPersonList();
+  } else if (e.key === 'Enter' && !e.isComposing) {
+    e.preventDefault();
+    if (m.results[m.hi]) selectPerson(m.results[m.hi].name);
+  }
+});
+/* マウスで指した候補をキーボードのハイライトと同期 */
+menu.addEventListener('mousemove', (e) => {
+  const item = e.target.closest('.person-item');
+  if (state.menu?.kind !== 'person' || !item || Number(item.dataset.index) === state.menu.hi) return;
+  state.menu.hi = Number(item.dataset.index);
+  menu.querySelectorAll('.person-item').forEach((el) => el.classList.toggle('is-highlighted', el === item));
+});
+
+/* --- text / number / date：セル上の入力欄 --- */
+const editorEl = $('cell-editor');
+const editorInput = editorEl.querySelector('input');
+
+function openCellEditor(td, row, col) {
+  closeMenu();
+  editing = { rowId: row.id, col };
+  const isNum = col.editor === 'number';
+  editorInput.type = col.editor === 'date' ? 'date' : 'text';
+  editorInput.inputMode = isNum ? 'numeric' : 'text';
+  editorInput.toggleAttribute('data-numeric', isNum);
+  editorInput.classList.toggle('is-number', isNum);
+  editorInput.value = isNum ? nf.format(row[col.key] ?? 0) : row[col.key] ?? '';
+  const r = td.getBoundingClientRect();
+  Object.assign(editorEl.style, {
+    left: `${r.left + 4}px`,
+    top: `${r.top + 5}px`,
+    width: `${Math.max(r.width - 8, col.editor === 'date' ? 156 : 0)}px`,
+    height: `${r.height - 10}px`,
+  });
+  editorEl.hidden = false;
+  editorInput.focus();
+  if (editorInput.type !== 'date') editorInput.select();
+}
+function closeCellEditor(save) {
+  if (!editing) return;
+  const { rowId, col } = editing;
+  editing = null;
+  editorInput.blur(); // editing を null にしてから外すことで blur ハンドラの二重確定を防ぐ
+  editorEl.hidden = true;
+  if (!save) return;
+  const raw = editorInput.value;
+  if (col.editor === 'date' && !raw) return;
+  const value = col.editor === 'number' ? parseNum(raw) ?? 0 : col.editor === 'text' ? raw.trim() : raw;
+  commit(rowId, col.key, value);
+}
+/* Tab / Shift+Tab で同じ行の前後の編集可能セルへ */
+function openAdjacentEditor(rowId, key, dir) {
+  const cols = COLUMNS.filter(isInlineEditable);
+  const next = cols[cols.findIndex((c) => c.key === key) + dir];
+  const td = next && bodyCell(rowId, next.key);
+  if (td) startEdit(td);
+}
+function startEdit(td) {
+  const row = getRow(Number(td.parentElement.dataset.id));
+  const col = getCol(td.dataset.key);
+  if (col.editor === 'person') openPersonMenu(td, row, col);
+  else if (col.editor === 'select' || col.editor === 'multiselect') openEditMenu(td, row, col);
+  else openCellEditor(td, row, col);
+}
+
+editorInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); closeCellEditor(true); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeCellEditor(false); }
+  else if (e.key === 'Tab') {
+    e.preventDefault();
+    const { rowId, col } = editing;
+    closeCellEditor(true);
+    openAdjacentEditor(rowId, col.key, e.shiftKey ? -1 : 1);
+  }
+});
+editorInput.addEventListener('blur', () => closeCellEditor(true));
+
+/* ============================================================
+ * 行の選択とキーボード移動
+ * ============================================================ */
+function setActive(id, { scroll = false } = {}) {
+  state.activeId = id;
+  $('body').querySelectorAll('tr.is-active').forEach((tr) => tr.classList.remove('is-active'));
+  const tr = $('body').querySelector(`tr[data-id="${id}"]`);
+  if (!tr) return;
+  tr.classList.add('is-active');
+  if (scroll) tr.firstElementChild.scrollIntoView({ block: 'nearest' });
+}
+function move(delta) {
+  const rows = visibleRows();
+  if (!rows.length) return;
+  const i = rows.findIndex((r) => r.id === state.activeId);
+  const next = i === -1 ? (delta > 0 ? 0 : rows.length - 1) : clamp(i + delta, 0, rows.length - 1);
+  setActive(rows[next].id, { scroll: true });
+  if (state.sheetId != null && state.sheetId !== rows[next].id) {
+    state.sheetId = rows[next].id;
+    loadSheetContent();
+  }
+}
+
+/* ============================================================
+ * 詳細シート
+ * ============================================================ */
+const sheet = $('sheet');
+const backdrop = $('backdrop');
+
+let sheetContentFrame = null;
+function loadSheetContent() {
+  closeMenu();
+  if (sheetContentFrame != null) cancelAnimationFrame(sheetContentFrame);
+  const body = $('sheet-body');
+  body.setAttribute('aria-busy', 'true');
+  $('row-more').disabled = true;
+  body.innerHTML = `<span class="sr-only" role="status">詳細を読み込んでいます</span><div aria-hidden="true"><div class="hero"><div class="skeleton skeleton-avatar"></div><div class="skeleton skeleton-title"></div></div><div class="group-body">${COLUMNS.filter(c => !c.primary).map(() => '<div class="g-row"><div class="skeleton skeleton-label"></div><div class="skeleton skeleton-value"></div></div>').join('')}</div></div>`;
+  // 外枠を保ったまま描画を予約する。実データ取得時は完了後に最新の行だけ描画する。
+  sheetContentFrame = requestAnimationFrame(() => {
+    sheetContentFrame = null;
+    if (state.sheetId != null) renderSheet();
+  });
+}
+let sheetOrigin = null;
+let sheetOriginId = null;
+function openSheet(id) {
+  if (state.sheetId == null) { sheetOrigin = document.activeElement; sheetOriginId = id; }
+  closeMenu();
+  closeCellEditor(true);
+  state.sheetId = id;
+  setActive(id, { scroll: true });
+  renderSheet();
+  sheet.inert = false;
+  document.querySelector('main').inert = true;
+  document.dispatchEvent(new CustomEvent('ui:modal', { detail: true }));
+  document.body.classList.add('has-sheet');
+  sheet.classList.add('is-open');
+  backdrop.classList.add('is-open');
+  sheet.focus({ preventScroll: true });
+}
+function closeSheet() {
+  if (state.sheetId == null) return;
+  document.activeElement?.blur(); // 編集中の入力を確定させてから閉じる
+  state.sheetId = null;
+  if (sheetContentFrame != null) cancelAnimationFrame(sheetContentFrame);
+  sheetContentFrame = null;
+  document.body.classList.remove('has-sheet');
+  sheet.classList.remove('is-open');
+  backdrop.classList.remove('is-open');
+  sheet.inert = true;
+  document.querySelector('main').inert = false;
+  document.dispatchEvent(new CustomEvent('ui:modal', { detail: false }));
+  if (sheetOrigin?.isConnected) sheetOrigin.focus({ preventScroll: true });
+  else { const replacement = document.querySelector(`#body tr[data-id="${sheetOriginId}"] td[tabindex]`); (replacement ?? document.querySelector('main')).focus({ preventScroll: true }); }
+}
+
+function fieldHTML(col, row) {
+  const v = row[col.key];
+  const k = col.key;
+  switch (col.editor) {
+    case 'text':
+      return `<input class="g-input" data-field="${k}" value="${esc(v)}" placeholder="未設定" autocomplete="off">`;
+    case 'number':
+      return `<input class="g-input num" type="text" inputmode="numeric" data-numeric data-field="${k}" value="${nf.format(v)}" autocomplete="off">${col.unit ? `<span class="g-unit">${col.unit}</span>` : ''}`;
+    case 'date':
+      return `<input class="g-input g-date num" type="date" data-field="${k}" value="${v}">`;
+    case 'person':
+      return `<button type="button" class="person-field" data-person="${k}">${v ? tagHTML(col, v) : '<span class="placeholder">未設定</span>'}${ICON.updown}</button>`;
+    case 'select':
+      return col.options.length <= 4
+        ? segmentedHTML(col.options.map((o) => [o, o]), v, { attrs: `data-seg="${k}" aria-label="${col.label}"` })
+        : `<div class="g-select-wrap"><select class="g-select" data-field="${k}">${col.options.map((o) => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>${ICON.updown}</div>`;
+    case 'multiselect': {
+      const cur = asArray(v);
+      return col.options.map((o) => `<button type="button" class="toggle-chip" data-chip="${k}" data-value="${esc(o)}" aria-pressed="${cur.includes(o)}"><i class="dot" style="--c:${TAG_COLOR[o]}"></i>${esc(o)}</button>`).join('');
+    }
+  }
+}
+function readonlyHTML(col, row) {
+  const v = row[col.key];
+  if (col.type === 'number') return fmtNumWithUnit(col, v);
+  if (col.type === 'date') return col.relative && v ? `${fmtDate(v)}（${fmtRelative(v)}）` : fmtDate(v);
+  return esc(v);
+}
+
+function renderSheet() {
+  if (sheetContentFrame != null) cancelAnimationFrame(sheetContentFrame);
+  sheetContentFrame = null;
+  $('sheet-body').setAttribute('aria-busy', 'false');
+  $('row-more').disabled = false;
+  const row = getRow(state.sheetId);
+  const rows = visibleRows();
+  const i = rows.findIndex((r) => r.id === row.id);
+  $('sheet-pos').textContent = i >= 0 ? `${i + 1} / ${rows.length}` : '';
+  sheet.querySelector('[data-nav="-1"]').disabled = i <= 0;
+  sheet.querySelector('[data-nav="1"]').disabled = i < 0 || i >= rows.length - 1;
+
+  const primary = COLUMNS.find((c) => c.primary);
+  const editable = COLUMNS.filter((c) => c.editor && !c.primary && !c.multiline);
+  const multiline = COLUMNS.filter((c) => c.multiline);
+  const auto = COLUMNS.filter((c) => !c.editor);
+
+  $('sheet-body').innerHTML = `
+    <div class="hero">
+      <span class="avatar lg" id="hero-avatar"></span>
+      <div class="hero-text">
+        <input class="hero-name" data-field="${primary.key}" value="${esc(row[primary.key])}" aria-label="${primary.label}" autocomplete="off">
+        <div class="hero-meta" id="hero-meta"></div>
+      </div>
+    </div>
+    <section class="group">
+      <h3 class="group-title">基本情報</h3>
+      <div class="group-body">${editable.map((c) => `<div class="g-row"><span class="g-label">${c.label}</span><div class="g-control">${fieldHTML(c, row)}</div></div>`).join('')}</div>
+    </section>
+    ${multiline.map((c) => `<section class="group">
+      <h3 class="group-title">${c.label}</h3>
+      <div class="group-body"><div class="g-row stack"><textarea class="g-textarea" data-field="${c.key}" placeholder="${c.label}を入力">${esc(row[c.key])}</textarea></div></div>
+    </section>`).join('')}
+    <section class="group">
+      <h3 class="group-title">自動取得</h3>
+      <div class="group-body">${auto.map((c) => `<div class="g-row"><span class="g-label">${c.label}</span><div class="g-control"><span class="g-value">${readonlyHTML(c, row)}</span></div></div>`).join('')}</div>
+      <p class="group-note">SNSと連携して自動で更新されます</p>
+    </section>`;
+  renderHero();
+}
+/* タイトル周り（アバター・ステータス等）だけ更新。入力中のフォーカスは保つ */
+function renderHero() {
+  const row = getRow(state.sheetId);
+  const name = row[COLUMNS.find((c) => c.primary).key];
+  const avatar = $('hero-avatar');
+  avatar.style.setProperty('--h', hue(name));
+  avatar.textContent = name.slice(0, 1);
+  $('hero-meta').innerHTML = COLUMNS.filter((c) => c.hero).map((c) => asArray(row[c.key]).map((t) => tagHTML(c, t)).join('')).join('');
+}
+
+const sheetBody = $('sheet-body');
+sheetBody.addEventListener('change', (e) => {
+  const key = e.target.dataset.field;
+  if (!key) return;
+  const col = getCol(key);
+  let v = e.target.value;
+  if (col.editor === 'number') v = parseNum(v) ?? 0;
+  if (col.editor === 'text') v = v.trim();
+  if ((col.primary || col.editor === 'date') && !v) { e.target.value = getRow(state.sheetId)[key]; return; }
+  commit(state.sheetId, key, v);
+});
+sheetBody.addEventListener('click', (e) => {
+  const personBtn = e.target.closest('[data-person]');
+  if (personBtn) {
+    if (state.menu?.anchor === personBtn) closeMenu();
+    else openPersonMenu(personBtn, getRow(state.sheetId), getCol(personBtn.dataset.person), { fromSheet: true });
+    return;
+  }
+  const seg = e.target.closest('[data-seg] button');
+  if (seg) {
+    selectSegment(seg);
+    commit(state.sheetId, seg.parentElement.dataset.seg, seg.dataset.value);
+    return;
+  }
+  const chip = e.target.closest('[data-chip]');
+  if (chip) {
+    const col = getCol(chip.dataset.chip);
+    const cur = asArray(getRow(state.sheetId)[col.key]);
+    const v = chip.dataset.value;
+    const next = (cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v]).sort((a, b) => col.options.indexOf(a) - col.options.indexOf(b));
+    chip.setAttribute('aria-pressed', String(next.includes(v)));
+    commit(state.sheetId, col.key, next);
+  }
+});
+/* 1行入力は Enter で確定してフォーカスを外す（そのまま ↑↓ で移動できる） */
+sheetBody.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.blur(); sheet.focus({ preventScroll: true }); }
+});
+sheet.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => move(Number(b.dataset.nav))));
+sheet.querySelector('[data-close]').addEventListener('click', closeSheet);
+backdrop.addEventListener('click', closeSheet);
+
+/* ============================================================
+ * トースト
+ * ============================================================ */
+let latestTableUndo = null;
+let tableUndoToast = null;
+function showToast(msg, undo) {
+  if (!undo) { sharedToast(msg); return; }
+  tableUndoToast?.dismiss();
+  let restored = false;
+  const restore = () => {
+    if (restored) return;
+    restored = true; undo();
+    if (latestTableUndo === restore) latestTableUndo = null;
+    tableUndoToast?.dismiss();
+    renderFooter(visibleRows().length);
+  };
+  latestTableUndo = restore;
+  tableUndoToast = sharedToast(msg, { onAction: restore });
+  renderFooter(visibleRows().length);
+}
+
+/* ============================================================
+ * イベント：テーブル
+ * ============================================================ */
+$('head-row').addEventListener('click', (e) => {
+  const th = e.target.closest('th');
+  if (!th || e.target.closest('.resizer')) return;
+  if (state.menu?.kind === 'filter' && state.menu.key === th.dataset.key) closeMenu();
+  else openFilterMenu(th.dataset.key);
+});
+$('head-row').addEventListener('keydown', (e) => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('th-inner')) {
+    e.preventDefault();
+    openFilterMenu(e.target.closest('th').dataset.key);
+  }
+});
+
+$('body').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-id]');
+  const td = e.target.closest('td');
+  if (!tr || !td) return;
+  const id = Number(tr.dataset.id);
+  setActive(id);
+  if (!td.classList.contains('is-editable')) { openSheet(id); return; }
+  if (state.menu && state.menu.kind !== 'filter' && isMenuAnchor(td)) { closeMenu(); return; }
+  startEdit(td);
+});
+
+$('body').addEventListener('keydown', (e) => {
+  const td = e.target.closest('td[tabindex]');
+  if (!td || !['Enter', ' '].includes(e.key)) return;
+  e.preventDefault();
+  openSheet(Number(td.closest('tr').dataset.id));
+});
+
+$('footer').addEventListener('click', (e) => {
+  if (e.target.closest('[data-undo-latest]')) { latestTableUndo?.(); return; }
+  const k = e.target.closest('[data-clear]')?.dataset.clear;
+  if (!k) return;
+  if (k === '*') state.filters = {};
+  else delete state.filters[k];
+  closeMenu();
+  renderHead();
+  renderBody();
+});
+
+menu.addEventListener('click', (e) => {
+  if (state.menu?.kind === 'edit') onEditMenuClick(e);
+  else if (state.menu?.kind === 'person') onPersonMenuClick(e);
+  else if (state.menu?.kind === 'agg') onAggMenuClick(e);
+  else if (state.menu?.kind === 'actions') onActionMenuClick(e);
+  else if (state.menu?.kind === 'filter') onFilterMenuClick(e);
+});
+
+document.addEventListener('mousedown', (e) => {
+  if (!state.menu || menu.contains(e.target) || isMenuAnchor(e.target)) return;
+  closeMenu();
+});
+
+$('scroll').addEventListener('scroll', (e) => {
+  e.currentTarget.classList.toggle('is-scrolled-x', e.currentTarget.scrollLeft > 0);
+  closeCellEditor(true);
+  if (state.menu && state.menu.kind !== 'filter' && !state.menu.fromSheet) closeMenu();
+  if (state.menu?.kind === 'filter') placeMenu(headCell(state.menu.key).getBoundingClientRect(), getCol(state.menu.key).type === 'number');
+});
+window.addEventListener('resize', () => { closeCellEditor(true); closeMenu(); });
+
+/* 数値入力は入力中もカンマ区切りに整形（キャプチャで各入力ハンドラより先に実行） */
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (!el.matches?.('[data-numeric]')) return;
+  const digitsBefore = el.value.slice(0, el.selectionStart).replace(/[^\d]/g, '').length;
+  const n = parseNum(el.value);
+  el.value = n == null ? '' : nf.format(n);
+  let pos = 0;
+  for (let seen = 0; pos < el.value.length && seen < digitsBefore; pos++) if (/\d/.test(el.value[pos])) seen++;
+  el.setSelectionRange(pos, pos);
+}, true);
+
+/* グローバルキー操作 */
+document.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented || e.target.closest('.app-sidebar, .app-mobile-bar')) return;
+  if (state.sheetId != null && e.key === 'Tab') {
+    const controls = [...sheet.querySelectorAll('button, input, textarea, select, [tabindex="0"]'), ...document.querySelectorAll('.app-toast button')].filter((control) => !control.disabled && control.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { e.preventDefault(); last?.focus(); }
+    else if (!e.shiftKey && (document.activeElement === last || document.activeElement === sheet)) { e.preventDefault(); first?.focus(); }
+    return;
+  }
+  if (e.target.closest('.app-toast')) return;
+  if (editing) return; // セル編集中は入力欄側で処理
+  if (e.key === 'Escape') {
+    if (state.menu) closeMenu();
+    else closeSheet();
+    return;
+  }
+  if (state.menu || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if (e.key === 'ArrowDown' || e.key === 'j') { e.preventDefault(); move(1); }
+  else if (e.key === 'ArrowUp' || e.key === 'k') { e.preventDefault(); move(-1); }
+  else if (e.key === 'Enter' && state.sheetId == null && state.activeId != null && !e.target.closest('button, [role="button"]')) {
+    e.preventDefault();
+    openSheet(state.activeId);
+  }
+});
+
+/* ============================================================
+ * 列幅変更
+ * ============================================================ */
+const MIN_WIDTH = 72;
+$('head-row').addEventListener('pointerdown', (e) => {
+  const handle = e.target.closest('.resizer');
+  if (!handle) return;
+  e.preventDefault();
+  closeMenu();
+  const key = handle.dataset.key;
+  const startX = e.clientX;
+  const startW = state.widths[key];
+  const colEl = $('colgroup').children[COLUMNS.findIndex((c) => c.key === key)];
+  handle.classList.add('is-active');
+  document.body.classList.add('is-resizing');
+  const onMove = (ev) => {
+    state.widths[key] = Math.max(MIN_WIDTH, startW + ev.clientX - startX);
+    colEl.style.width = `${state.widths[key]}px`;
+  };
+  const onUp = () => {
+    document.body.classList.remove('is-resizing');
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+    renderHead();
+  };
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+});
+$('head-row').addEventListener('dblclick', (e) => {
+  const handle = e.target.closest('.resizer');
+  if (!handle) return;
+  state.widths[handle.dataset.key] = getCol(handle.dataset.key).width;
+  renderHead();
+});
+
+/* ============================================================
+ * プレビュー専用：テーマ切替
+ * ============================================================ */
+$('theme-switch').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  const v = btn.dataset.value;
+  selectSegment(btn);
+  setTheme(v);
+});
+
+renderHead();
+renderBody();
+</script>
+</body>
+</html>

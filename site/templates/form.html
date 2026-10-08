@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>フォーム — UI Guidelines</title>
+  <link rel="stylesheet" href="../styles/tokens.css">
+  <link rel="stylesheet" href="../styles/primitives.css">
+  <link rel="stylesheet" href="../styles/samples.css">
+</head>
+<body data-page="form">
+  <main class="ui-page ui-stack">
+    <header>
+      <h1 class="ui-heading">ワークスペースを作成</h1>
+      <p class="ui-description">チームが使う名前を設定してください。</p>
+    </header>
+    <form id="workspace-form" class="ui-stack" novalidate>
+      <section class="ui-group" aria-labelledby="basic-heading">
+        <h2 id="basic-heading" class="ui-section-heading">基本情報</h2>
+        <div class="ui-fields">
+          <div class="ui-field">
+            <label class="ui-label" for="workspace-name">名前（必須）</label>
+            <input class="ui-input" id="workspace-name" name="name" type="text" autocomplete="organization" required aria-describedby="name-help name-error">
+            <p class="ui-help" id="name-help">後から変更できます。</p>
+            <p class="ui-error" id="name-error" hidden>名前を入力してください。</p>
+          </div>
+          <div class="ui-field">
+            <label class="ui-label" for="workspace-note">説明（任意）</label>
+            <textarea class="ui-input" id="workspace-note" name="note" rows="3" aria-describedby="note-help"></textarea>
+            <p class="ui-help" id="note-help">チームの目的を短く書いてください。</p>
+          </div>
+        </div>
+      </section>
+      <div class="ui-actions">
+        <button class="ui-button" id="save" type="submit" data-variant="primary">作成する</button>
+        <button class="ui-button" id="cancel" type="button" data-variant="secondary">入力をリセット</button>
+      </div>
+      <p class="ui-feedback" id="feedback" role="status" aria-live="polite">見本です。入力内容は送信されません。</p>
+      <p class="ui-error" id="save-error" role="alert" hidden></p>
+    </form>
+    <aside class="ui-stack" aria-label="見本の確認用コントロール">
+      <div class="ui-demo-controls">
+        <label for="demo-state">保存の見本
+          <select class="ui-input" id="demo-state">
+            <option value="saved">成功</option><option value="error">エラー</option><option value="saving">保存中</option>
+          </select>
+        </label>
+      </div>
+      <p class="ui-help">下の選択欄は検証用です。製品画面には含めません。</p>
+    </aside>
+  </main>
+  <script type="module">
+    import { mountShell, showToast } from '../samples/ui.mjs';
+    mountShell('form');
+    const form = document.querySelector('#workspace-form');
+    const nameInput = document.querySelector('#workspace-name');
+    const nameError = document.querySelector('#name-error');
+    const save = document.querySelector('#save');
+    const cancel = document.querySelector('#cancel');
+    const feedback = document.querySelector('#feedback');
+    const saveError = document.querySelector('#save-error');
+    const demoState = document.querySelector('#demo-state');
+
+    function setSaving(saving) {
+      save.disabled = saving;
+      cancel.disabled = saving;
+      form.setAttribute('aria-busy', String(saving));
+      save.textContent = saving ? '作成する（保存中）' : '作成する';
+      for (const field of form.querySelectorAll('input, textarea')) field.disabled = saving;
+    }
+    function showResult() {
+      const state = demoState.value;
+      setSaving(state === 'saving');
+      saveError.hidden = state !== 'error';
+      saveError.textContent = state === 'error' ? '保存できませんでした。入力は保持されています。「作成する」から再試行してください。' : '';
+      if (state === 'saved') showToast('ワークスペースを作成しました（見本）');
+      feedback.textContent = state === 'saving' ? '保存中です。' : state === 'error' ? 'エラーの見本を表示しています。' : 'ワークスペースを作成しました（見本）。';
+    }
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      if (save.disabled) return;
+      const valid = nameInput.value.trim().length > 0;
+      nameError.hidden = valid;
+      nameInput.setAttribute('aria-invalid', String(!valid));
+      if (!valid) { nameInput.focus(); return; }
+      showResult();
+    });
+    nameInput.addEventListener('input', () => {
+      nameError.hidden = true;
+      nameInput.removeAttribute('aria-invalid');
+    });
+    cancel.addEventListener('click', () => {
+      form.reset(); nameError.hidden = true; saveError.hidden = true;
+      nameInput.removeAttribute('aria-invalid');
+      feedback.textContent = '入力をリセットしました（見本）。'; nameInput.focus();
+    });
+    demoState.addEventListener('change', () => { if (form.getAttribute('aria-busy') === 'true') showResult(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+/* Webフォームの共通実装例。ページから内部スタイルを上書きしない。 */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font); font-size: var(--text-body); line-height: var(--line-body); }
+button, input, textarea, select { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+.ui-button { text-decoration: none; font-family: inherit; }
+.ui-page { width: 100%; max-width: var(--form-max-width); margin: 0 auto; padding: var(--page-gutter); }
+.ui-stack { display: grid; gap: var(--group-gap); }
+.ui-heading { margin: 0; font-size: var(--text-title); line-height: var(--line-title); font-weight: var(--weight-bold); }
+.ui-description { margin: var(--label-gap) 0 0; color: var(--muted-ink); }
+.ui-group { padding: var(--group-gap); border: var(--border-width) solid var(--separator); border-radius: var(--radius-xl); background: var(--card); }
+.ui-section-heading { margin: 0 0 var(--field-gap); font-size: var(--text-heading); font-weight: var(--weight-semibold); }
+.ui-fields { display: grid; gap: var(--field-gap); }
+.ui-field { display: grid; gap: var(--label-gap); }
+.ui-label { font-weight: var(--weight-medium); }
+.ui-help { margin: 0; color: var(--muted-ink); font-size: var(--text-compact); }
+.ui-input { width: 100%; min-width: 0; min-height: var(--input-regular); padding: var(--space-4) var(--space-5); border: var(--border-width) solid transparent; border-radius: var(--radius-md); background: var(--fill); }
+.ui-input:focus-visible { outline: var(--focus-width) solid var(--accent); outline-offset: var(--focus-offset); }
+.ui-input[aria-invalid="true"] { border-color: var(--red); }
+.ui-error { margin: 0; color: var(--red); font-size: var(--text-compact); }
+.ui-actions { display: flex; flex-wrap: wrap; gap: var(--space-5); align-items: center; }
+.ui-actions .ui-button { min-width: var(--action-min-width); }
+.ui-button { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-4); min-height: var(--control-regular); padding: var(--space-4) var(--space-6); border: var(--border-width) solid transparent; border-radius: var(--radius-md); background: var(--fill); color: var(--ink); font-weight: var(--weight-medium); cursor: pointer; transition: opacity var(--motion-fast) var(--ease-standard); }
+.ui-button[data-variant="primary"] { background: var(--action-accent); color: var(--on-accent); }
+.ui-button[data-variant="tertiary"] { background: transparent; color: var(--accent); }
+.ui-button[data-variant="destructive"] { background: var(--danger-soft); color: var(--red); }
+.ui-button[data-density="compact"] { min-height: var(--control-compact); padding: 0 var(--space-5); font-size: var(--text-compact); }
+.ui-button:focus-visible { outline: var(--focus-width) solid var(--accent); outline-offset: var(--focus-offset); }
+.ui-button:disabled { cursor: default; opacity: var(--disabled-opacity); }
+.ui-feedback { margin: 0; color: var(--muted-ink); }
+.ui-feedback[data-state="error"] { color: var(--red); }
+.ui-demo-controls { display: flex; flex-wrap: wrap; gap: var(--space-5); padding-top: var(--group-gap); border-top: var(--border-width) solid var(--separator); }
+.ui-demo-controls label { display: grid; gap: var(--label-gap); flex: 1; }
+@media (max-width: 720px) {
+  .ui-page { padding: var(--page-gutter-small); }
+  .ui-group { padding: var(--space-6); }
+}
+@media (any-pointer: coarse) {
+  .ui-button[data-density="compact"] { min-height: var(--control-regular); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-button { transition-duration: var(--motion-reduced); }
+}
